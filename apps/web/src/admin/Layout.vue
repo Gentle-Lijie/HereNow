@@ -8,7 +8,6 @@ import {
   PlusOutlined,
   LogoutOutlined,
   MenuOutlined,
-  ArrowRightOutlined,
 } from '@ant-design/icons-vue';
 import Brand from '../components/Brand.vue';
 import { api, session } from '../services/api';
@@ -29,7 +28,9 @@ async function logout() {
         borderRadius: 7,
         fontFamily: 'inherit',
         colorText: '#2b302d',
-        controlHeight: 40,
+        controlHeight: 36,
+        colorBgLayout: '#ffffff',
+        colorBgContainer: '#ffffff',
       },
     }"
     ><div class="admin-shell">
@@ -39,7 +40,7 @@ async function logout() {
         /></RouterLink>
         <div class="workspace-label">
           <span class="workspace-avatar">H</span>
-          <div>我的活动空间<small>轻量签到工作台</small></div>
+          <div>我的活动空间</div>
           <span class="workspace-dot"></span>
         </div>
         <div class="nav-label">工作空间</div>
@@ -53,12 +54,6 @@ async function logout() {
             ><PlusOutlined />创建活动</RouterLink
           >
         </nav>
-        <div class="sidebar-note">
-          <span class="note-icon">✳</span>
-          <h3>简单签到，专注相聚。</h3>
-          <p>一个活动，一张动态码。<br />让现场的每一步更从容。</p>
-          <span>HERE. NOW. TOGETHER. <ArrowRightOutlined /></span>
-        </div>
         <div class="sidebar-user">
           <span class="user-avatar">{{ session.user?.username.slice(0, 1).toUpperCase() }}</span>
           <div>
@@ -80,17 +75,14 @@ async function logout() {
             <MenuOutlined /></button
           ><span class="header-breadcrumb">工作空间 <span>/</span> <strong>活动管理</strong></span>
           <div class="header-right">
-            <span class="live-dot"></span> 每一份在场，都值得记录
             <span class="header-date">{{
               new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric' }).format(new Date())
             }}</span>
           </div>
         </header>
         <main class="admin-main"><RouterView /></main>
-        <footer><span>HereNow · 在场</span><span>为每一次相聚，留下温度。</span></footer>
-      </div>
-    </div></a-config-provider
-  >
+      </div></div
+  ></a-config-provider>
 </template>
 <style scoped>
 .admin-shell {
@@ -99,17 +91,17 @@ async function logout() {
 }
 aside {
   position: fixed;
-  width: 246px;
+  width: 220px;
   inset: 0 auto 0 0;
-  background: #f6f6f1;
+  background: var(--surface);
   border-right: 1px solid var(--border);
-  padding: 34px 22px 20px;
+  padding: 24px 16px 16px;
   display: flex;
   flex-direction: column;
   z-index: 50;
 }
 .sidebar-brand {
-  margin: 0 10px 38px;
+  margin: 0 0 24px;
 }
 .workspace-label {
   display: flex;
@@ -149,7 +141,7 @@ aside {
   font-size: 10px;
   letter-spacing: 2px;
   color: #92968d;
-  padding: 28px 12px 13px;
+  padding: 20px 12px 12px;
 }
 nav {
   display: grid;
@@ -176,36 +168,12 @@ nav a:hover {
   margin-left: auto;
   font-size: 17px;
 }
-.sidebar-note {
-  margin-top: auto;
-  padding: 25px 14px 32px;
-}
-.note-icon {
-  font-size: 35px;
-  color: #b2bda3;
-}
-.sidebar-note h3 {
-  font-size: 13px;
-  margin: 15px 0 10px;
-  font-weight: 600;
-}
-.sidebar-note p {
-  font-size: 12px;
-  color: #848b7d;
-  line-height: 1.9;
-}
-.sidebar-note > span:last-child {
-  font-size: 8px;
-  letter-spacing: 1.6px;
-  color: #949c8c;
-  display: flex;
-  justify-content: space-between;
-}
 .sidebar-user {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 18px 4px 0;
+  margin-top: auto;
+  padding: 16px 4px 0;
   border-top: 1px solid var(--border);
   font-size: 12px;
 }
@@ -218,6 +186,16 @@ nav a:hover {
   place-items: center;
   font-weight: 700;
 }
+.sidebar-user > div {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-user > span,
+.sidebar-user button {
+  flex-shrink: 0;
+}
 .sidebar-user button {
   border: 0;
   background: none;
@@ -226,21 +204,21 @@ nav a:hover {
   padding: 10px;
 }
 .main-shell {
-  margin-left: 246px;
-  width: calc(100% - 246px);
+  margin-left: 220px;
+  width: calc(100% - 220px);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 header {
-  height: 78px;
+  height: 60px;
   border-bottom: 1px solid var(--border);
-  padding: 0 42px;
+  padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   font-size: 12px;
-  background: #ffffff80;
+  background: var(--surface);
 }
 .header-breadcrumb {
   color: #a0a399;
@@ -260,33 +238,15 @@ header {
   color: #85907d;
   font-size: 11px;
 }
-.live-dot {
-  height: 5px;
-  width: 5px;
-  border-radius: 50%;
-  background: #7aa376;
-}
 .header-date {
-  border-left: 1px solid var(--border);
-  padding-left: 20px;
-  margin-left: 16px;
   color: #9c9f96;
 }
 .admin-main {
-  padding: 38px 42px;
+  padding: 24px;
   max-width: 1440px;
   width: 100%;
   margin: 0 auto;
   flex: 1;
-}
-footer {
-  display: flex;
-  justify-content: space-between;
-  padding: 22px 42px;
-  font-size: 10px;
-  letter-spacing: 0.5px;
-  color: #a4a79d;
-  border-top: 1px solid var(--border);
 }
 .mobile-menu {
   display: none;
@@ -313,7 +273,7 @@ footer {
     padding: 0 24px;
   }
   .admin-main {
-    padding: 28px 24px;
+    padding: 20px 24px;
   }
   .header-right {
     display: none;
@@ -322,7 +282,7 @@ footer {
 @media (max-width: 767px) {
   aside {
     transform: translateX(-100%);
-    width: 246px;
+    width: 220px;
   }
   aside.open {
     transform: translateX(0);
@@ -346,16 +306,16 @@ footer {
     gap: 20px;
   }
   .mobile-menu {
-    display: block;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     border: 0;
     background: none;
-    padding: 8px;
+    min-width: 44px;
+    min-height: 44px;
   }
   .admin-main {
-    padding: 25px 18px;
-  }
-  footer {
-    padding: 20px 18px;
+    padding: 16px;
   }
   .sidebar-note {
     padding-bottom: 20px;

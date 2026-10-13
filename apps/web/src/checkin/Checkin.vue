@@ -241,7 +241,7 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <div class="checkin-page">
-    <header class="checkin-header"><Brand small /><span>一份在场，一份记录。</span></header>
+    <header class="checkin-header"><Brand small /></header>
     <main class="checkin-main">
       <div v-if="loading" class="checkin-loading">
         <van-loading size="25px" color="#d6603d">正在准备本次签到…</van-loading>
@@ -252,15 +252,12 @@ onBeforeUnmount(() => {
             <path d="m10 20 7 7 14-15" /></svg
           ><span v-else>{{ result.status === 'PENDING_REVIEW' ? '…' : '!' }}</span>
         </div>
-        <span class="eyebrow">THANK YOU FOR BEING HERE</span>
         <h1>{{ checkinLabels[result.status] }}</h1>
-        <p>
+        <p v-if="result.status !== 'CHECKED_IN'">
           {{
-            result.status === 'CHECKED_IN'
-              ? '很高兴，你在这里。'
-              : result.status === 'PENDING_REVIEW'
-                ? '请联系现场工作人员完成核验。'
-                : '记录已撤销，请联系现场工作人员。'
+            result.status === 'PENDING_REVIEW'
+              ? '请联系现场工作人员完成核验。'
+              : '记录已撤销，请联系现场工作人员。'
           }}
         </p>
         <div class="receipt-details">
@@ -283,7 +280,6 @@ onBeforeUnmount(() => {
       </section>
       <template v-else
         ><section v-if="publicSession" class="checkin-intro">
-          <span class="event-kicker">YOU'RE INVITED TO BE HERE</span>
           <h1>{{ publicSession.event.name }}</h1>
           <p v-if="publicSession.event.description" class="event-description">
             {{ publicSession.event.description }}
@@ -293,7 +289,8 @@ onBeforeUnmount(() => {
               ><svg viewBox="0 0 20 20" aria-hidden="true">
                 <rect x="3" y="4" width="14" height="13" rx="2" />
                 <path d="M6 2v4m8-4v4M3 9h14" /></svg
-              >{{ formatTime(publicSession.event.starts_at, publicSession.event.timezone) }}</span
+              >{{ formatTime(publicSession.event.starts_at, publicSession.event.timezone) }} —
+              {{ formatTime(publicSession.event.ends_at, publicSession.event.timezone) }}</span
             ><span v-if="publicSession.event.location_label"
               ><svg viewBox="0 0 20 20" aria-hidden="true">
                 <path d="M16 8c0 5-6 10-6 10S4 13 4 8a6 6 0 1 1 12 0Z" />
@@ -308,10 +305,9 @@ onBeforeUnmount(() => {
           <p>请重新扫描现场最新二维码。已填内容会短时保留。</p>
         </div>
         <template v-if="publicSession"
-          ><section class="form-title">
-            <h2>告诉我们，你已在场。</h2>
-            <span v-if="!expired">{{ remaining }} 秒内提交</span>
-          </section>
+          ><p v-if="!expired" class="session-countdown" role="timer">
+            请在 {{ remaining }} 秒内提交
+          </p>
           <van-form :disabled="expired" scroll-to-error @submit="submit" @failed="formFailed"
             ><van-cell-group class="checkin-fields"
               ><van-field
@@ -329,12 +325,9 @@ onBeforeUnmount(() => {
             /></van-cell-group>
             <section v-if="publicSession.event.location_mode !== 'off'" class="location-card">
               <div class="location-heading">
-                <span class="location-icon">◎</span>
                 <div>
                   <strong>{{
-                    publicSession.event.location_mode === 'required'
-                      ? '确认你在活动现场'
-                      : '记录本次位置'
+                    publicSession.event.location_mode === 'required' ? '现场定位' : '记录本次位置'
                   }}</strong>
                   <p>
                     {{
@@ -358,7 +351,6 @@ onBeforeUnmount(() => {
               </div>
             </section>
             <section class="privacy-card">
-              <h3>关于本次信息收集</h3>
               <p>
                 {{ publicSession.event.organizer }}
                 收集本次身份标识与表单信息，用于活动签到管理。签到资料在活动结束后保留
@@ -384,18 +376,13 @@ onBeforeUnmount(() => {
                 :loading="submitting"
                 :disabled="expired && !networkUncertain"
                 loading-text="正在提交…"
-                >{{ networkUncertain ? '确认上次提交结果' : '确认签到' }} <span>↗</span></van-button
+                >{{ networkUncertain ? '确认上次提交结果' : '确认签到' }}</van-button
               >
-              <p>网络中断时请重试，以服务器确认的结果为准。</p>
             </div></van-form
           ></template
         >
-        <div v-else class="no-session-art" aria-hidden="true">
-          <div>HERE<br /><em>& NOW</em></div>
-        </div></template
-      >
+      </template>
     </main>
-    <footer class="checkin-footer">HereNow · 为每一次相聚，留下温度。</footer>
   </div>
 </template>
 <style scoped>
@@ -405,338 +392,231 @@ onBeforeUnmount(() => {
   --van-button-primary-border-color: #d6603d;
   --van-switch-on-background: #d6603d;
   --van-picker-confirm-action-color: #d6603d;
-  --van-button-border-radius: 9px;
-  --van-field-input-text-color: #3f483b;
-  --van-field-label-color: #65705d;
+  --van-button-border-radius: 8px;
+  --van-field-input-text-color: #2b302d;
+  --van-field-label-color: #586455;
   --van-font-size-md: 16px;
   min-height: 100dvh;
-  background: #faf9f6;
+  background: var(--surface);
 }
 .checkin-header {
-  height: 78px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 15px;
   max-width: 560px;
   margin: auto;
-  padding: 0 24px;
-}
-.checkin-header > span {
-  font-size: 10px;
-  color: #a2aa96;
+  padding: 16px;
 }
 .checkin-main {
   max-width: 560px;
   margin: auto;
-  padding: 28px 24px 0;
-}
-.event-kicker {
-  font-size: 9px;
-  letter-spacing: 2px;
-  color: #9aa789;
-  font-weight: 600;
+  padding: 8px 16px 0;
 }
 .checkin-intro h1 {
-  font-size: 28px;
-  line-height: 1.45;
-  margin: 17px 0 14px;
-  color: #3a4832;
-  letter-spacing: -0.8px;
+  font-size: 24px;
+  line-height: 1.4;
+  margin: 0 0 12px;
   overflow-wrap: anywhere;
 }
 .event-description {
-  font-size: 13px;
-  color: #89947e;
+  font-size: 14px;
+  color: var(--muted);
   white-space: pre-wrap;
-  line-height: 1.9;
-  margin-bottom: 20px;
+  line-height: 1.6;
+  margin-bottom: 12px;
+  overflow-wrap: anywhere;
 }
 .checkin-event-meta {
   display: grid;
-  gap: 9px;
-  font-size: 11px;
-  color: #98a18b;
-  border-bottom: 1px solid #e5e9dd;
-  padding-bottom: 26px;
-  margin-bottom: 26px;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 16px;
 }
 .checkin-event-meta > span {
   display: flex;
-  gap: 9px;
-  align-items: center;
+  gap: 8px;
+  align-items: flex-start;
+  overflow-wrap: anywhere;
 }
 .checkin-event-meta svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.4;
   flex-shrink: 0;
 }
-.form-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 18px;
-}
-.form-title h2 {
-  font-size: 15px;
-  font-weight: 600;
-  margin: 0;
-  color: #56664a;
-}
-.form-title > span {
-  font-size: 10px;
-  color: #a2ab96;
+.session-countdown {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 8px;
 }
 .checkin-fields {
-  border: 1px solid #e4e8dc;
-  border-radius: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
   overflow: hidden;
-  background: #fff;
 }
 .checkin-fields :deep(.van-cell) {
-  padding: 18px 20px;
+  padding: 12px 16px;
 }
 .checkin-fields :deep(.van-field__label--top) {
-  margin-bottom: 10px;
-  font-size: 13px;
+  margin-bottom: 4px;
+  font-size: 14px;
   font-weight: 500;
 }
 .checkin-fields :deep(.van-field__control) {
   font-size: 16px;
-  line-height: 1.6;
+  line-height: 1.5;
+  min-height: 44px;
 }
 .checkin-fields :deep(.van-field__control::placeholder) {
-  color: #bec6b3;
-  font-size: 13px;
-}
-.checkin-fields :deep(.van-cell::after) {
-  border-color: #edf0e6;
+  color: #899085;
+  font-size: 16px;
 }
 .location-card {
-  margin-top: 20px;
-  padding: 19px;
-  background: #f0f4e8;
-  border: 1px solid #e0e9d2;
-  border-radius: 9px;
-}
-.location-heading {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-.location-icon {
-  font-size: 30px;
-  color: #8b9f77;
+  margin-top: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 .location-heading strong {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
-  color: #728760;
 }
 .location-heading p {
-  font-size: 10px;
-  color: #9bab8b;
-  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 4px 0 0;
 }
 .location-bottom {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  margin-top: 17px;
+  margin-top: 8px;
 }
 .location-bottom > span {
-  font-size: 10px;
-  color: #879c6f;
-  line-height: 1.6;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
 }
 .location-bottom .van-button {
   flex-shrink: 0;
+  min-width: 88px;
   height: 44px;
-  border-color: #b9cba6;
-  color: #7e9467;
-  background: transparent;
-  font-size: 11px;
+  font-size: 14px;
 }
 .privacy-card {
-  padding: 22px 3px 16px;
-}
-.privacy-card h3 {
-  font-size: 12px;
-  color: #68795b;
-  font-weight: 500;
-  margin: 0 0 8px;
+  padding: 12px 0 8px;
 }
 .privacy-card p {
   font-size: 12px;
-  color: #75806c;
-  line-height: 1.9;
-  margin-bottom: 19px;
+  color: #677160;
+  line-height: 1.6;
+  margin-bottom: 8px;
+  overflow-wrap: anywhere;
 }
 .privacy-card :deep(.van-checkbox__label) {
-  font-size: 12px;
-  color: #58684e;
-  line-height: 1.7;
-}
-.checkin-submit {
-  padding: 5px 0 max(20px, env(safe-area-inset-bottom));
-  position: relative;
+  font-size: 13px;
+  line-height: 1.5;
 }
 .privacy-card :deep(.van-checkbox) {
   min-height: 44px;
 }
+.checkin-submit {
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
 .checkin-submit .van-button {
-  height: 49px;
+  height: 48px;
   font-size: 16px;
-  letter-spacing: 0.5px;
-}
-.checkin-submit .van-button span {
-  margin-left: 15px;
-}
-.checkin-submit > p {
-  font-size: 10px;
-  color: #aab29f;
-  text-align: center;
-  margin: 13px 0 0;
-}
-.checkin-footer {
-  text-align: center;
-  color: #afb6a5;
-  font-size: 9px;
-  letter-spacing: 0.5px;
-  padding: 27px 18px max(24px, env(safe-area-inset-bottom));
 }
 .checkin-loading {
-  padding: 80px 0;
+  padding: 40px 0;
   text-align: center;
 }
 .session-expired {
   background: #fff3e0;
   border: 1px solid #eddac0;
-  padding: 17px;
+  padding: 12px 16px;
   border-radius: 8px;
-  color: #9b792e;
-  margin-bottom: 20px;
-  font-size: 12px;
+  color: #856322;
+  margin-bottom: 12px;
+  font-size: 14px;
 }
 .session-expired p {
-  margin: 8px 0 0;
-  font-size: 11px;
+  margin: 4px 0 0;
+  font-size: 12px;
 }
 .result-card {
   text-align: center;
-  padding: 35px 0;
+  padding: 16px 0;
 }
 .result-symbol {
-  width: 76px;
-  height: 76px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   background: #e9f2e3;
   display: grid;
   place-items: center;
-  margin: 0 auto 32px;
-  color: #71975b;
-  font-size: 30px;
+  margin: 0 auto 16px;
+  color: #557d3e;
+  font-size: 28px;
 }
 .result-symbol svg {
-  width: 39px;
-  height: 39px;
+  width: 32px;
+  height: 32px;
   fill: none;
-  stroke: #789c62;
+  stroke: currentColor;
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 .result-symbol.PENDING_REVIEW {
   background: #fff0d9;
-  color: #b7893d;
+  color: #986b22;
 }
 .result-symbol.REVOKED {
   background: #fae8e1;
-  color: #b26246;
-}
-.result-card > .eyebrow {
-  font-size: 8px;
-  letter-spacing: 2px;
-  color: #a0ad91;
+  color: #a04b30;
 }
 .result-card h1 {
-  margin: 20px 0 10px;
-  font-size: 30px;
-  color: #566b44;
+  margin: 0 0 8px;
+  font-size: 24px;
 }
 .result-card > p {
-  font-size: 13px;
-  color: #92a180;
+  font-size: 14px;
+  color: var(--muted);
 }
 .receipt-details {
-  margin: 35px 0 22px;
+  margin: 16px 0;
   text-align: left;
-  background: #fff;
-  border: 1px solid #e3e9da;
-  border-radius: 10px;
-  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
 }
 .receipt-details > div {
   display: grid;
-  grid-template-columns: 70px 1fr;
-  gap: 16px;
-  margin: 13px 0;
-  font-size: 12px;
-  line-height: 1.7;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+  margin: 8px 0;
+  font-size: 14px;
+  line-height: 1.5;
 }
 .receipt-details span {
-  font-size: 11px;
-  color: #a2ac94;
+  font-size: 13px;
+  color: var(--muted);
 }
 .receipt-details strong {
   font-weight: 500;
-  color: #6f7e62;
+  overflow-wrap: anywhere;
 }
 .receipt-id {
-  font-size: 10px;
-  overflow-wrap: anywhere;
+  font-size: 12px;
   font-family: monospace;
 }
 .result-footer {
-  font-size: 11px;
-  color: #a4ae98;
-}
-.no-session-art {
-  height: 250px;
-  display: grid;
-  place-items: center;
-  color: #c1cbb6;
-}
-.no-session-art > div {
-  font-size: 55px;
-  line-height: 1;
-  font-weight: 800;
-  letter-spacing: -3px;
-}
-.no-session-art em {
-  font-style: normal;
-  color: #d6dccc;
-}
-@media (max-width: 359px) {
-  .checkin-header {
-    padding: 0 18px;
-  }
-  .checkin-header > span {
-    display: none;
-  }
-  .checkin-main {
-    padding: 20px 18px 0;
-  }
-  .checkin-intro h1 {
-    font-size: 25px;
-  }
-  .checkin-fields :deep(.van-cell) {
-    padding: 17px 16px;
-  }
+  font-size: 12px;
+  color: var(--muted);
 }
 </style>

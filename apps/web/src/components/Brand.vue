@@ -10,6 +10,7 @@ defineProps<{ light?: boolean; small?: boolean }>();
 <style scoped>
 .brand {
   display: flex;
+  white-space: nowrap;
   align-items: center;
   gap: 11px;
   font-size: 22px;
@@ -21,6 +22,7 @@ defineProps<{ light?: boolean; small?: boolean }>();
   color: #fff;
 }
 .brand-mark {
+  flex-shrink: 0;
   display: grid;
   grid-template-columns: repeat(2, 7px);
   gap: 4px;
@@ -47,6 +49,7 @@ defineProps<{ light?: boolean; small?: boolean }>();
   font-size: 18px;
 }
 .small .brand-mark {
+  flex-shrink: 0;
   padding: 7px;
 }
 </style>

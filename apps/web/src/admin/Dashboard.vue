@@ -80,9 +80,7 @@ onMounted(refresh);
   <div class="dashboard">
     <section class="dashboard-intro">
       <div>
-        <span class="eyebrow">YOUR GATHERINGS, ALL HERE.</span>
-        <h1>每一场相聚，都从在场开始<span>。</span></h1>
-        <p>创建活动、展示签到码，剩下的交给 HereNow。</p>
+        <h1>活动工作台</h1>
       </div>
       <a-button
         v-if="session.user?.role === 'admin'"
@@ -99,24 +97,20 @@ onMounted(refresh);
       <div class="stat">
         <div class="stat-label"><span>全部活动</span><AppstoreOutlined /></div>
         <div class="stat-number">{{ events.length }}<small>场</small></div>
-        <div class="stat-caption">每一次相聚，都在这里</div>
       </div>
       <div class="stat">
         <div class="stat-label"><span>正在进行</span><span class="tiny-dot"></span></div>
         <div class="stat-number">{{ totals.live }}<small>场</small></div>
-        <div class="stat-caption">现场签到已开放</div>
       </div>
       <div class="stat">
-        <div class="stat-label"><span>累计在场</span><CheckCircleOutlined /></div>
+        <div class="stat-label"><span>累计签到</span><CheckCircleOutlined /></div>
         <div class="stat-number">{{ totals.checkins.toLocaleString() }}<small>人次</small></div>
-        <div class="stat-caption">已确认的签到记录</div>
       </div>
       <div class="stat">
         <div class="stat-label"><span>待核验</span><TeamOutlined /></div>
         <div class="stat-number" :class="{ attention: totals.pending }">
           {{ totals.pending }}<small>条</small>
         </div>
-        <div class="stat-caption">留给现场工作人员确认</div>
       </div>
     </section>
     <section class="activity-section">
@@ -124,7 +118,6 @@ onMounted(refresh);
         <h2>
           我的活动 <span>{{ events.length }}</span>
         </h2>
-        <span class="activity-note">把心思留给活动，把签到交给在场。</span>
       </div>
       <div class="activity-toolbar">
         <div class="filter-tabs" role="tablist" aria-label="活动分类">
@@ -151,8 +144,8 @@ onMounted(refresh);
       <a-skeleton v-if="loading" active :paragraph="{ rows: 5 }" />
       <div v-else-if="!visible.length" class="panel empty-state">
         <div class="empty-symbol"><CalendarOutlined /></div>
-        <h3>{{ search ? '没有找到匹配的活动' : '下一次相聚，从这里开始' }}</h3>
-        <p>{{ search ? '试试其他关键词。' : '创建活动，让现场签到变得简单。' }}</p>
+        <h3>{{ search ? '没有找到匹配的活动' : '暂无活动' }}</h3>
+        <p>{{ search ? '试试其他关键词。' : '点击创建活动开始配置。' }}</p>
         <a-button
           v-if="!search && session.user?.role === 'admin'"
           type="primary"
@@ -161,20 +154,7 @@ onMounted(refresh);
         >
       </div>
       <div v-else class="event-grid">
-        <article v-for="(event, index) in visible" :key="event.id" class="event-card">
-          <div class="event-cover" :class="`cover-${index % 3}`">
-            <span class="cover-category">{{
-              event.category === 'internal' ? '内部活动' : '公开活动'
-            }}</span>
-            <div class="cover-art" aria-hidden="true">
-              <span class="cover-ring"></span><span class="cover-ring secondary"></span
-              ><span class="cover-square"></span>
-            </div>
-            <span class="cover-word">{{
-              event.category === 'internal' ? 'GET TOGETHER' : 'MEET & CONNECT'
-            }}</span
-            ><span class="cover-index">{{ String(index + 1).padStart(2, '0') }}</span>
-          </div>
+        <article v-for="event in visible" :key="event.id" class="event-card">
           <div class="event-body">
             <div class="event-topline">
               <span class="status-pill" :class="event.state">{{
@@ -187,7 +167,7 @@ onMounted(refresh);
                   : stateLabels[event.state]
               }}</span
               ><span class="event-mode">{{
-                event.admission === 'roster' ? '名单签到' : '开放签到'
+                `${event.category === 'internal' ? '内部' : '对外'} · ${event.admission === 'roster' ? '名单签到' : '开放签到'}`
               }}</span>
             </div>
             <RouterLink :to="`/admin/events/${event.id}/records`"
@@ -206,7 +186,7 @@ onMounted(refresh);
               <div>
                 <strong>{{ event.checkin_count }}</strong
                 ><span
-                  >人已在场<template v-if="event.admission === 'roster'">
+                  >人已签到<template v-if="event.admission === 'roster'">
                     / {{ event.participant_count }} 人名单</template
                   ></span
                 >
@@ -237,26 +217,8 @@ onMounted(refresh);
             </div>
           </div>
         </article>
-        <button
-          v-if="session.user?.role === 'admin' && filter === 'all' && !search"
-          class="create-tile"
-          @click="router.push('/admin/events/new')"
-        >
-          <span class="create-tile-icon"><PlusOutlined /></span>
-          <h3>准备下一次相聚</h3>
-          <p>几步配置，即可开启现场签到</p>
-          <span class="create-tile-link">创建新活动 <ArrowRightOutlined /></span>
-        </button>
       </div>
     </section>
-    <div class="dashboard-bottom">
-      <span class="bottom-symbol">✳</span>
-      <div>
-        <strong>现场的主角是你们，而不是签到流程。</strong>
-        <p>活动二维码支持多人同时扫码；不同身份的签到，分别记录。</p>
-      </div>
-      <span class="bottom-word">LESS FRICTION.<br />MORE CONNECTION.</span>
-    </div>
   </div>
 </template>
 <style scoped>
@@ -264,39 +226,26 @@ onMounted(refresh);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 2px 0 35px;
-  gap: 24px;
+  gap: 16px;
+  margin-bottom: 20px;
 }
 .dashboard-intro h1 {
-  font-size: 29px;
-  margin: 13px 0 12px;
-  line-height: 1.5;
-}
-.dashboard-intro h1 > span {
-  color: var(--accent);
-}
-.dashboard-intro p {
-  font-size: 13px;
-  color: var(--muted);
+  font-size: 24px;
   margin: 0;
 }
 .dashboard-intro .ant-btn {
-  font-size: 13px;
-  height: 43px;
   flex-shrink: 0;
-  padding: 0 20px;
 }
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  background: #fff;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border: 1px solid var(--border);
-  border-radius: 11px;
-  margin-bottom: 37px;
-  padding: 24px 0;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  padding: 16px 0;
 }
 .stat {
-  padding: 0 27px;
+  padding: 0 20px;
   border-right: 1px solid var(--border);
 }
 .stat:last-child {
@@ -305,342 +254,159 @@ onMounted(refresh);
 .stat-label {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
-  color: #77816e;
   align-items: center;
-}
-.stat-label > .anticon {
-  color: #9ba48f;
-  font-size: 15px;
-}
-.tiny-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #74a37b;
+  font-size: 13px;
+  color: var(--muted);
 }
 .stat-number {
-  font-size: 37px;
+  font-size: 28px;
   font-weight: 600;
-  letter-spacing: -1px;
-  margin: 15px 0 8px;
-  line-height: 1.1;
+  margin-top: 8px;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
 .stat-number small {
+  font-size: 12px;
   font-weight: 400;
-  font-size: 11px;
-  margin-left: 10px;
-  color: #9b9f95;
-  letter-spacing: 0;
-}
-.stat-caption {
-  font-size: 10px;
-  color: #9b9f95;
+  margin-left: 8px;
+  color: var(--muted);
 }
 .attention {
-  color: #b58530;
+  color: #a87528;
+}
+.tiny-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
 }
 .activity-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 22px;
+  margin-bottom: 12px;
 }
 .activity-title h2 {
   font-size: 17px;
-  font-weight: 600;
   margin: 0;
 }
 .activity-title h2 span {
-  font-size: 11px;
-  background: #ecede6;
-  color: #8b9381;
-  padding: 3px 7px;
-  border-radius: 5px;
+  font-size: 12px;
+  color: var(--muted);
   margin-left: 8px;
-}
-.activity-note {
-  font-size: 10px;
-  color: #9a9f92;
 }
 .activity-toolbar {
   display: flex;
   justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 21px;
+  gap: 12px;
+  margin-bottom: 16px;
   align-items: center;
 }
 .filter-tabs {
   display: flex;
-  gap: 6px;
-  background: #efefe8;
+  gap: 4px;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 4px;
 }
 .filter-tabs button {
-  background: none;
+  background: var(--surface);
   border: 0;
-  padding: 7px 15px;
-  color: #868e7f;
-  font-size: 12px;
-  border-radius: 5px;
+  padding: 4px 12px;
+  color: var(--muted);
+  font-size: 13px;
+  border-radius: 4px;
   white-space: nowrap;
   min-height: 32px;
 }
 .filter-tabs button.active {
-  background: white;
-  color: #3f4a38;
-  box-shadow: 0 1px 4px #00000009;
+  color: var(--accent);
+  font-weight: 600;
 }
 .activity-search {
-  width: 232px;
-  background: #faf9f6;
-  height: 36px;
-  font-size: 12px;
+  width: 240px;
 }
 .event-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 22px;
+  gap: 16px;
 }
 .event-card {
   border: 1px solid var(--border);
-  border-radius: 11px;
-  overflow: hidden;
-  background: #fff;
-  transition: box-shadow 0.2s;
-}
-.event-card:hover {
-  box-shadow: 0 5px 20px #293d2910;
-}
-.event-cover {
-  height: 142px;
-  background: #e5ebdd;
-  position: relative;
-  overflow: hidden;
-  padding: 20px 24px;
-  color: #849576;
-}
-.cover-category {
-  font-size: 9px;
-  letter-spacing: 1px;
-  padding: 4px 7px;
-  border: 1px solid #aab99b70;
-  border-radius: 3px;
-}
-.cover-word {
-  position: absolute;
-  bottom: 21px;
-  left: 24px;
-  font-size: 10px;
-  letter-spacing: 2.2px;
-  font-weight: 700;
-}
-.cover-index {
-  position: absolute;
-  right: 24px;
-  bottom: 17px;
-  font-size: 23px;
-  letter-spacing: -1px;
-  font-weight: 400;
-  opacity: 0.6;
-}
-.cover-art {
-  position: absolute;
-  top: 5px;
-  right: 60px;
-  width: 165px;
-  height: 140px;
-}
-.cover-ring {
-  position: absolute;
-  width: 92px;
-  height: 92px;
-  border: 1px solid #a2b68f;
-  border-radius: 50%;
-  top: 12px;
-  left: 35px;
-}
-.cover-ring.secondary {
-  top: 47px;
-  left: 67px;
-  border-color: #bdc9b1;
-}
-.cover-square {
-  width: 27px;
-  height: 27px;
-  border: 1px solid #a2b68f;
-  position: absolute;
-  left: 20px;
-  bottom: 18px;
-  transform: rotate(23deg);
-  border-radius: 2px;
-}
-.cover-1 {
-  background: #eee3d6;
-  color: #ac9273;
-}
-.cover-1 .cover-ring,
-.cover-1 .cover-square {
-  border-color: #cab597;
-}
-.cover-2 {
-  background: #dfe8eb;
-  color: #7e9aa4;
-}
-.cover-2 .cover-ring,
-.cover-2 .cover-square {
-  border-color: #a3bbc4;
+  border-radius: 8px;
+  background: var(--surface);
+  min-width: 0;
 }
 .event-body {
-  padding: 22px 24px 14px;
+  padding: 16px;
 }
 .event-topline {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 14px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 .event-mode {
-  font-size: 10px;
-  color: #a3a798;
+  font-size: 12px;
+  color: var(--muted);
 }
 .event-body h3 {
   font-size: 17px;
-  font-weight: 600;
-  margin: 0 0 18px;
-  line-height: 1.6;
+  margin: 0 0 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 .event-meta {
-  font-size: 11px;
-  color: #8b9283;
+  font-size: 12px;
+  color: var(--muted);
   display: flex;
   align-items: flex-start;
-  gap: 9px;
-  margin: 9px 0;
+  gap: 8px;
+  margin: 8px 0;
 }
 .event-meta .anticon {
-  margin-top: 2px;
+  margin-top: 3px;
+}
+.event-meta span {
+  overflow-wrap: anywhere;
 }
 .event-attendance {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 23px 0 16px;
-  padding-top: 17px;
-  border-top: 1px solid #eff0ea;
-  gap: 12px;
+  margin: 12px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  gap: 8px;
+  flex-wrap: wrap;
 }
 .event-attendance strong {
-  font-size: 23px;
-  letter-spacing: -0.5px;
-  margin-right: 9px;
+  font-size: 22px;
+  margin-right: 8px;
   font-weight: 600;
 }
-.event-attendance div > span {
-  font-size: 10px;
-  color: #939b89;
-}
+.event-attendance div > span,
 .attendance-hint,
 .pending-hint {
-  font-size: 10px;
-  color: #99a28c;
+  font-size: 12px;
+  color: var(--muted);
 }
 .pending-hint {
-  color: #b58733;
+  color: #a87528;
 }
 .event-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 5px;
-  border-top: 1px solid #f0f1eb;
-  padding-top: 13px;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
 }
 .event-actions .ant-btn {
-  font-size: 11px;
-  height: 34px;
+  font-size: 13px;
   padding: 0 12px;
 }
 .event-actions .ant-btn-text {
   padding-left: 0;
-  color: #78856a;
-}
-.create-tile {
-  border: 1px dashed #d6dccc;
-  border-radius: 11px;
-  background: #f7f8f2;
-  min-height: 375px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #8a967d;
-  transition: background 0.2s;
-}
-.create-tile:hover {
-  background: #f0f3e8;
-}
-.create-tile-icon {
-  background: #e9eedf;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  width: 45px;
-  height: 45px;
-  font-size: 20px;
-  margin-bottom: 19px;
-}
-.create-tile h3 {
-  font-size: 14px;
-  color: #6b7c5c;
-  font-weight: 500;
-  margin: 0 0 11px;
-}
-.create-tile p {
-  font-size: 11px;
-  color: #a0aa94;
-  margin-bottom: 21px;
-}
-.create-tile-link {
-  font-size: 11px;
-  color: #7e906d;
-}
-.create-tile-link .anticon {
-  margin-left: 5px;
-}
-.dashboard-bottom {
-  display: flex;
-  align-items: center;
-  gap: 21px;
-  margin-top: 30px;
-  padding: 23px 26px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #f6f5f0;
-}
-.bottom-symbol {
-  font-size: 33px;
-  color: #a5ae97;
-}
-.dashboard-bottom strong {
-  font-size: 12px;
-  font-weight: 500;
-  color: #7b856e;
-}
-.dashboard-bottom p {
-  font-size: 10px;
-  color: #a0a694;
-  margin: 7px 0 0;
-}
-.bottom-word {
-  font-size: 8px;
-  letter-spacing: 1.3px;
-  color: #a4ad97;
-  line-height: 1.8;
-  margin-left: auto;
-  flex-shrink: 0;
 }
 .inline-retry {
   background: none;
@@ -654,120 +420,39 @@ onMounted(refresh);
   }
 }
 @media (max-width: 1023px) {
+  .event-grid {
+    grid-template-columns: 1fr;
+  }
   .stat {
-    padding: 0 18px;
-  }
-  .stats-grid {
-    padding: 22px 0;
-  }
-  .stat-caption {
-    display: none;
-  }
-  .dashboard-intro h1 {
-    font-size: 24px;
-  }
-  .activity-note {
-    display: none;
-  }
-  .event-cover {
-    height: 115px;
-  }
-  .event-body {
-    padding: 18px 17px 12px;
-  }
-  .event-meta {
-    font-size: 10px;
-  }
-  .event-attendance {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 5px;
-  }
-  .event-actions .ant-btn {
-    padding: 0 8px;
-    font-size: 10px;
-  }
-  .bottom-word {
-    display: none;
+    padding: 0 12px;
   }
 }
 @media (max-width: 767px) {
   .dashboard-intro {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 20px;
-    margin-bottom: 26px;
+    gap: 12px;
   }
   .dashboard-intro h1 {
-    font-size: 24px;
-  }
-  .dashboard-intro .eyebrow {
-    font-size: 9px;
+    font-size: 22px;
   }
   .stats-grid {
-    grid-template-columns: 1fr 1fr;
-    row-gap: 25px;
-    padding: 22px 0;
-    margin-bottom: 28px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 16px;
   }
   .stat:nth-child(2) {
     border: 0;
   }
-  .stat-number {
-    font-size: 32px;
-  }
-  .stat-caption {
-    display: block;
-    font-size: 9px;
-  }
   .activity-toolbar {
     flex-direction: column;
     align-items: stretch;
-    gap: 15px;
   }
   .filter-tabs button {
     flex: 1;
-    padding: 8px 10px;
-    min-height: 36px;
+    min-height: 44px;
+    padding: 4px 8px;
   }
   .activity-search {
     width: 100%;
-    height: 40px;
-  }
-  .event-grid {
-    grid-template-columns: 1fr;
-    gap: 18px;
-  }
-  .event-cover {
-    height: 132px;
-  }
-  .event-body {
-    padding: 20px;
-  }
-  .event-attendance {
-    flex-direction: row;
-    align-items: center;
-  }
-  .event-actions .ant-btn {
-    height: 40px;
-    font-size: 12px;
-    padding: 0 12px;
-  }
-  .create-tile {
-    min-height: 215px;
-  }
-  .dashboard-bottom {
-    padding: 20px 15px;
-    gap: 13px;
-  }
-  .dashboard-bottom strong {
-    font-size: 11px;
-  }
-  .dashboard-bottom p {
-    font-size: 10px;
-  }
-  .activity-title {
-    margin-bottom: 18px;
+    min-height: 44px;
   }
 }
 </style>

@@ -175,9 +175,7 @@ onMounted(load);
     <RouterLink to="/admin" class="back-link"><ArrowLeftOutlined /> 返回活动工作台</RouterLink>
     <div class="page-heading">
       <div>
-        <span class="eyebrow">SET THE STAGE</span>
-        <h1>{{ id ? '管理活动' : '创建一场相聚' }}</h1>
-        <p>从基本信息开始，把签到安排妥当。</p>
+        <h1>{{ id ? '管理活动' : '创建活动' }}</h1>
       </div>
       <div class="actions-row">
         <span v-if="event" class="status-pill" :class="event.state">{{
@@ -214,7 +212,7 @@ onMounted(load);
         <div class="section-stack">
           <section class="panel">
             <div class="section-number">01 / 基本信息</div>
-            <h2 class="panel-title">这次，我们在哪里相聚？</h2>
+            <h2 class="panel-title">基本信息</h2>
             <p class="panel-subtitle">活动名称与说明将展示在手机签到页。</p>
             <a-form-item label="活动名称" required
               ><a-input
@@ -276,7 +274,7 @@ onMounted(load);
           </section>
           <section class="panel">
             <div class="section-number">02 / 签到方式</div>
-            <h2 class="panel-title">如何识别每一份在场？</h2>
+            <h2 class="panel-title">签到准入</h2>
             <p class="panel-subtitle">每个活动固定一个身份标识，发布后不能更改。</p>
             <div class="admission-options">
               <button
@@ -321,16 +319,14 @@ onMounted(load);
             <div class="section-number">03 / 签到表单</div>
             <div class="fields-heading">
               <div>
-                <h2 class="panel-title">只问必要的信息。</h2>
+                <h2 class="panel-title">自定义字段</h2>
                 <p class="panel-subtitle">身份字段自动包含在表单中，最多 30 个自定义字段。</p>
               </div>
               <a-button :disabled="form.fields.length >= 30" @click="addField"
                 ><PlusOutlined /> 添加字段</a-button
               >
             </div>
-            <div v-if="!form.fields.length" class="fields-empty">
-              还没有额外字段。简洁的表单，让签到更轻松。
-            </div>
+            <div v-if="!form.fields.length" class="fields-empty">暂无自定义字段</div>
             <div v-for="(field, index) in form.fields" :key="index" class="field-card">
               <div class="field-card-top">
                 <span>字段 {{ String(index + 1).padStart(2, '0') }}</span>
@@ -414,7 +410,7 @@ onMounted(load);
         <div class="section-stack editor-side">
           <section class="panel">
             <div class="section-number">04 / 现场定位</div>
-            <h2 class="panel-title">为现场，加一层确认。</h2>
+            <h2 class="panel-title">定位规则</h2>
             <p class="panel-subtitle">定位辅助判断活动范围，不能保证本人在场。</p>
             <a-form-item label="定位规则"
               ><a-select
@@ -447,7 +443,7 @@ onMounted(load);
           </section>
           <section class="panel">
             <div class="section-number">05 / 隐私与保留</div>
-            <h2 class="panel-title">必要收集，妥善保管。</h2>
+            <h2 class="panel-title">隐私与保留</h2>
             <p class="panel-subtitle">参与者提交前将看到用途、保留期与联系渠道。</p>
             <a-form-item label="联系渠道"
               ><a-input
@@ -490,8 +486,9 @@ onMounted(load);
 <style scoped>
 .editor-layout {
   display: grid;
+  align-items: start;
   grid-template-columns: minmax(0, 1.65fr) minmax(290px, 1fr);
-  gap: 24px;
+  gap: 16px;
 }
 .section-number {
   font-size: 10px;
@@ -574,7 +571,7 @@ onMounted(load);
   border-radius: 8px;
 }
 .field-card {
-  background: #fafbf7;
+  background: var(--surface);
   border: 1px solid #e6eadd;
   border-radius: 8px;
   padding: 18px;
@@ -643,8 +640,8 @@ onMounted(load);
   justify-content: space-between;
   align-items: center;
   gap: 15px;
-  margin-top: 28px;
-  padding: 20px 0;
+  margin-top: 16px;
+  padding: 16px 0;
   border-top: 1px solid var(--border);
 }
 .editor-savebar span {

@@ -135,7 +135,6 @@ onMounted(refresh);
     <RouterLink to="/admin" class="back-link"><ArrowLeftOutlined /> 返回活动工作台</RouterLink>
     <div class="page-heading">
       <div>
-        <span class="eyebrow">WHO'S COMING</span>
         <h1>参与名单</h1>
         <p>{{ event?.name }}</p>
       </div>
@@ -156,7 +155,7 @@ onMounted(refresh);
       ><section class="panel import-panel">
         <div class="import-heading">
           <div>
-            <h2 class="panel-title">把你的参与者，带到这里。</h2>
+            <h2 class="panel-title">导入名单</h2>
             <p class="panel-subtitle">上传 → 映射与预览 → 确认导入。名单不会自动计作已签到。</p>
           </div>
           <span class="import-badge">CSV / XLSX</span>
@@ -317,10 +316,10 @@ onMounted(refresh);
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  background: #f7f9f2;
+  background: var(--surface);
   border: 1px dashed #cfd9c4;
   border-radius: 9px;
-  padding: 32px 20px;
+  padding: 20px;
   text-align: center;
   cursor: pointer;
   position: relative;
@@ -422,7 +421,7 @@ td {
   white-space: nowrap;
 }
 th {
-  background: #fafbf7;
+  background: var(--surface);
   color: #8a957c;
   font-weight: 500;
 }
@@ -466,7 +465,7 @@ th {
     flex-direction: column;
   }
   .upload-area {
-    padding: 28px 14px;
+    padding: 20px 14px;
   }
   .mapping-details summary span {
     display: block;

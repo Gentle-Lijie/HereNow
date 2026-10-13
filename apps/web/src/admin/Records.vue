@@ -168,7 +168,6 @@ onBeforeUnmount(() => {
     <RouterLink to="/admin" class="back-link"><ArrowLeftOutlined /> 返回活动工作台</RouterLink>
     <div class="page-heading">
       <div>
-        <span class="eyebrow">EVERY PRESENCE MATTERS</span>
         <h1>签到记录</h1>
         <p>{{ event?.name }}</p>
       </div>
@@ -190,7 +189,7 @@ onBeforeUnmount(() => {
         <strong>{{ total }}</strong
         ><span>条记录</span>
       </div>
-      <p>只把确认成功的签到计为在场，待核验与撤销记录分别保留。</p>
+      <p>待核验与撤销记录不计入签到成功人数。</p>
       <a v-if="session.user?.role === 'admin'" :href="`/api/admin/events/${id}/export`"
         ><a-button><DownloadOutlined /> 导出 XLSX</a-button></a
       >
@@ -253,7 +252,7 @@ onBeforeUnmount(() => {
           ><template #emptyText
             ><div class="empty-state">
               <QrcodeOutlined class="empty-symbol" />
-              <h3>等待第一份在场</h3>
+              <h3>暂无签到记录</h3>
               <p>展示活动二维码，参与者完成签到后，记录会出现在这里。</p>
             </div></template
           ></a-table
@@ -376,11 +375,11 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 25px;
   align-items: center;
-  padding: 24px 27px;
-  background: #f0f3e9;
+  padding: 16px 20px;
+  background: var(--surface);
   border: 1px solid #e0e7d5;
   border-radius: 10px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 .records-summary > div {
   flex-shrink: 0;
@@ -409,7 +408,7 @@ onBeforeUnmount(() => {
 .records-toolbar {
   display: flex;
   gap: 12px;
-  margin-bottom: 25px;
+  margin-bottom: 16px;
 }
 .records-toolbar > .ant-input-affix-wrapper {
   max-width: 280px;

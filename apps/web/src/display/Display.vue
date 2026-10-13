@@ -106,9 +106,8 @@ onBeforeUnmount(() => {
     </header>
     <main class="display-main">
       <div class="display-copy">
-        <span class="display-kicker">GLAD YOU'RE HERE.</span>
         <h1>{{ name }}</h1>
-        <p>扫一扫，让我们知道你已在场<span>。</span></p>
+        <p>扫码签到</p>
         <div v-if="locationLabel" class="display-location">◎ {{ locationLabel }}</div>
       </div>
       <div class="qr-card">
@@ -149,9 +148,6 @@ onBeforeUnmount(() => {
         {{ error }} · 当前码将在到期后隐藏
       </div>
     </main>
-    <footer class="display-footer">
-      <span>HERE. NOW. TOGETHER.</span><span>每一份在场，都值得记录。</span>
-    </footer>
   </div>
 </template>
 <style scoped>
@@ -159,35 +155,16 @@ onBeforeUnmount(() => {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  background: #f2f4ea;
+  background: var(--surface);
   color: #3f5134;
   position: relative;
   overflow: hidden;
-}
-.display-page::before,
-.display-page::after {
-  content: '';
-  position: absolute;
-  width: 700px;
-  height: 700px;
-  border: 1px solid #dfe6d4;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 0;
-}
-.display-page::before {
-  left: -500px;
-  top: 80px;
-}
-.display-page::after {
-  right: -490px;
-  bottom: -80px;
 }
 .display-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 32px 48px;
+  padding: 20px 32px;
   position: relative;
   z-index: 1;
   gap: 20px;
@@ -224,14 +201,9 @@ onBeforeUnmount(() => {
   text-align: center;
   max-width: 750px;
 }
-.display-kicker {
-  font-size: 10px;
-  letter-spacing: 3px;
-  color: #a4b291;
-}
 .display-copy h1 {
   font-size: clamp(26px, 3vw, 41px);
-  margin: 22px 0 14px;
+  margin: 0 0 8px;
   line-height: 1.4;
   color: #4e6340;
   letter-spacing: -1.3px;
@@ -249,7 +221,7 @@ onBeforeUnmount(() => {
 .display-location {
   font-size: 11px;
   color: #a2af92;
-  margin-bottom: 24px;
+  margin-bottom: 12px;
 }
 .qr-card {
   background: #fff;
@@ -257,7 +229,6 @@ onBeforeUnmount(() => {
   padding: 20px 25px 0;
   border-radius: 16px;
   width: min(390px, 75vw);
-  box-shadow: 0 16px 40px #687e4610;
   overflow: hidden;
   margin-top: 10px;
 }
@@ -361,7 +332,7 @@ onBeforeUnmount(() => {
   display: flex;
   gap: 20px;
   align-items: center;
-  margin: 31px 0 17px;
+  margin: 16px 0 12px;
   color: #9ba88d;
   font-size: 11px;
 }
@@ -377,8 +348,8 @@ onBeforeUnmount(() => {
   background: #dce4d1;
 }
 .preview-link {
-  font-size: 9px;
-  color: #a2af91;
+  font-size: 12px;
+  color: #677160;
   border-bottom: 1px solid #dce4d0;
   padding: 3px;
 }
@@ -386,18 +357,6 @@ onBeforeUnmount(() => {
   font-size: 11px;
   color: #a68a49;
   margin-top: 12px;
-}
-.display-footer {
-  display: flex;
-  justify-content: space-between;
-  padding: 22px 48px;
-  position: relative;
-  z-index: 1;
-  color: #b2bda5;
-  font-size: 9px;
-}
-.display-footer > span:first-child {
-  letter-spacing: 1.8px;
 }
 @media (max-width: 767px) {
   .display-header {
@@ -428,10 +387,6 @@ onBeforeUnmount(() => {
   }
   .display-steps b {
     display: none;
-  }
-  .display-footer {
-    padding: 22px 20px;
-    font-size: 8px;
   }
   .qr-card {
     width: min(360px, 86vw);
@@ -470,9 +425,6 @@ onBeforeUnmount(() => {
   .preview-link {
     grid-column: 1;
     justify-self: start;
-  }
-  .display-footer {
-    padding: 15px 35px;
   }
 }
 </style>

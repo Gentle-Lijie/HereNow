@@ -1,0 +1,7 @@
+# 项目级官方 Ant Design MCP；Vue 组件 API 仍以 Ant Design Vue / Vant 为准。
+[mcp_servers.antd]
+command = "npx"
+args = ["-y", "@ant-design/cli@6.6.6", "mcp", "--version", "6.6.6"]
+enabled = true
+startup_timeout_sec = 120
+tool_timeout_sec = 60

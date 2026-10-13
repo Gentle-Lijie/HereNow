@@ -1,0 +1,10 @@
+node_modules/
+.env
+.env.*
+!.env.example
+apps/*/dist/
+output/
+.playwright-cli/
+*.log
+.DS_Store
+.local/

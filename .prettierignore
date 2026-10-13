@@ -1,0 +1,9 @@
+node_modules
+output
+.playwright-cli
+**/dist
+package-lock.json
+spec.md
+AGENTS.md
+.codex
+.env*

@@ -20,6 +20,7 @@ import {
   ArrowDownOutlined,
   DeleteOutlined,
   ArrowRightOutlined,
+  UploadOutlined,
 } from '@ant-design/icons-vue';
 import {
   eventInputSchema,
@@ -357,30 +358,40 @@ onMounted(load);
                 :maxlength="2000"
                 placeholder="给参与者写一段简短的介绍或提醒"
             /></a-form-item>
-            <a-form-item
-              label="扫码签到页 Logo"
-              extra="PNG、JPEG 或 WebP，最大 2 MB；保存活动后生效"
-            >
-              <div class="logo-controls">
-                <EventBrand :logo="form.checkin_logo" :name="form.name" />
-                <a-button :loading="logoLoading" @click="logoInput?.click()">{{
-                  form.checkin_logo ? '替换图片' : '选择图片'
-                }}</a-button>
-                <a-button
-                  v-if="form.checkin_logo"
-                  :disabled="logoLoading"
-                  @click="form.checkin_logo = null"
-                  >恢复默认</a-button
-                >
-                <input
-                  ref="logoInput"
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  hidden
-                  :disabled="logoLoading || loading || event?.state === 'CLOSED'"
-                  @change="selectLogo"
-                />
+            <a-form-item label="活动 Logo" extra="用于扫码签到页和电子码展示页，保存活动后生效">
+              <div class="logo-picker">
+                <div class="logo-preview">
+                  <EventBrand :logo="form.checkin_logo" :name="form.name" />
+                  <span>{{ form.checkin_logo ? '活动 Logo 预览' : 'HereNow 默认 Logo' }}</span>
+                </div>
+                <div class="logo-picker-details">
+                  <div class="logo-picker-actions">
+                    <a-button :loading="logoLoading" html-type="button" @click="logoInput?.click()">
+                      <UploadOutlined />{{ form.checkin_logo ? '替换图片' : '选择图片' }}
+                    </a-button>
+                    <a-button
+                      v-if="form.checkin_logo"
+                      type="text"
+                      :disabled="logoLoading"
+                      @click="form.checkin_logo = null"
+                    >
+                      恢复默认
+                    </a-button>
+                  </div>
+                  <p class="logo-file-hint">PNG、JPEG 或 WebP · 最大 2 MB</p>
+                </div>
               </div>
+              <input
+                v-show="false"
+                ref="logoInput"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                hidden
+                tabindex="-1"
+                aria-hidden="true"
+                :disabled="logoLoading || loading || event?.state === 'CLOSED'"
+                @change="selectLogo"
+              />
             </a-form-item>
           </section>
           <section class="panel">
@@ -602,11 +613,53 @@ onMounted(load);
   </div>
 </template>
 <style scoped>
-.logo-controls {
+.logo-picker {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+.logo-preview {
+  min-height: 96px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.logo-preview > span,
+.logo-file-hint {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.logo-preview :deep(.event-logo) {
+  max-width: 100%;
+}
+.logo-picker-details {
+  min-width: 0;
+}
+.logo-picker-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
+}
+.logo-picker-actions :deep(.ant-btn) {
+  min-height: 44px;
+}
+.logo-file-hint {
+  margin: 8px 0 0;
+}
+@media (max-width: 640px) {
+  .logo-picker {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
 }
 .editor-layout {
   display: grid;

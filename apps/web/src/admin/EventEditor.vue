@@ -53,7 +53,7 @@ const form = reactive(
 );
 form.name = '';
 form.organizer = '';
-const locked = computed(() => event.value && event.value.state !== 'DRAFT');
+const locked = computed(() => Boolean(event.value?.configuration_locked));
 const labels: Record<Field['type'], string> = {
   text: '单行文本',
   textarea: '多行文本',
@@ -89,6 +89,35 @@ async function load() {
 function addField() {
   const key = `field_${Date.now().toString(36)}`;
   form.fields.push(fieldSchema.parse({ key, label: '新字段', type: 'text' }));
+}
+function frozenField(field: Field) {
+  return Boolean(locked.value && event.value?.fields.some((entry) => entry.key === field.key));
+}
+function setFieldKey(field: Field, value: string) {
+  const previous = field.key;
+  if (previous === value) return;
+  field.key = value;
+  if (optionDrafts[previous] !== undefined) {
+    optionDrafts[value] = optionDrafts[previous]!;
+    delete optionDrafts[previous];
+  }
+}
+function setFieldType(field: Field, value: unknown) {
+  const type = fieldTypes.find((entry) => entry === value);
+  if (!type) return;
+  field.type = type;
+  if (!['text', 'textarea', 'email'].includes(type)) field.ignore_case = false;
+  if (!['text', 'phone', 'email'].includes(type)) field.roster_match = false;
+}
+function setRosterMatch(field: Field, enabled: boolean) {
+  for (const entry of form.fields) entry.roster_match = false;
+  if (enabled) {
+    field.roster_match = true;
+    field.required = true;
+    field.source = 'user';
+    field.visibility = 'public';
+    field.max_length = Math.min(120, field.max_length);
+  }
 }
 function move(index: number, direction: number) {
   const field = form.fields[index];
@@ -275,15 +304,6 @@ onMounted(load);
           <section class="panel">
             <div class="section-number">02 / 签到方式</div>
             <h2 class="panel-title">签到准入</h2>
-            <p class="panel-subtitle">
-              {{
-                event?.state === 'CLOSED'
-                  ? '活动已结束，签到配置不可修改。'
-                  : locked
-                    ? '活动已发布，身份类型和大小写规则已锁定；字段名称仍可修改。'
-                    : '发布后锁定身份类型和大小写规则；字段名称可继续修改。'
-              }}
-            </p>
             <div class="admission-options">
               <button
                 type="button"
@@ -292,7 +312,7 @@ onMounted(load);
                 @click="form.admission = 'open'"
               >
                 <span class="choice-circle"></span><strong>开放签到</strong
-                ><small>填写身份标识，即可参与</small></button
+                ><small>无需提前导入名单</small></button
               ><button
                 type="button"
                 :class="{ selected: form.admission === 'roster' }"
@@ -303,37 +323,23 @@ onMounted(load);
                 ><small>仅导入名单中的参与者可签到</small>
               </button>
             </div>
-            <div class="form-grid">
-              <a-form-item label="身份类型"
-                ><a-select
-                  v-model:value="form.identity_type"
-                  :disabled="Boolean(locked)"
-                  :options="[
-                    { value: 'registration', label: '报名编号' },
-                    { value: 'employee', label: '员工号' },
-                    { value: 'student', label: '学号' },
-                    { value: 'phone', label: '中国大陆手机号' },
-                  ]" /></a-form-item
-              ><a-form-item label="身份字段名称"
-                ><a-input v-model:value="form.identity_label" :maxlength="60"
-              /></a-form-item>
-            </div>
-            <label class="switch-line"
-              ><span>标识忽略大小写<small>员工号、学号与编号均保留前导零。</small></span
-              ><a-switch v-model:checked="form.ignore_case" :disabled="Boolean(locked)"
-            /></label>
           </section>
           <section class="panel">
             <div class="section-number">03 / 签到表单</div>
             <div class="fields-heading">
               <div>
                 <h2 class="panel-title">自定义字段</h2>
-                <p class="panel-subtitle">身份字段自动包含在表单中，最多 30 个自定义字段。</p>
+                <p class="panel-subtitle">
+                  最多 30 个字段。关闭“允许重复”后，该字段的相同值不能再次签到。
+                </p>
               </div>
               <a-button :disabled="form.fields.length >= 30" @click="addField"
                 ><PlusOutlined /> 添加字段</a-button
               >
             </div>
+            <p v-if="locked" class="side-hint">
+              已有名单或签到记录，已有字段结构已锁定；名称和重复规则仍可调整。
+            </p>
             <div v-if="!form.fields.length" class="fields-empty">暂无自定义字段</div>
             <div v-for="(field, index) in form.fields" :key="index" class="field-card">
               <div class="field-card-top">
@@ -355,7 +361,7 @@ onMounted(load);
                     <ArrowDownOutlined /></button
                   ><button
                     type="button"
-                    :disabled="Boolean(locked)"
+                    :disabled="frozenField(field)"
                     aria-label="删除字段"
                     @click="form.fields.splice(index, 1)"
                   >
@@ -367,18 +373,20 @@ onMounted(load);
                 <a-form-item label="字段名称"><a-input v-model:value="field.label" /></a-form-item
                 ><a-form-item label="字段类型"
                   ><a-select
-                    v-model:value="field.type"
-                    :disabled="Boolean(locked)"
-                    :options="fieldOptions" /></a-form-item
+                    :value="field.type"
+                    :disabled="frozenField(field)"
+                    :options="fieldOptions"
+                    @change="(value) => setFieldType(field, value)" /></a-form-item
                 ><a-form-item label="字段键"
                   ><a-input
-                    v-model:value="field.key"
-                    :disabled="Boolean(locked)"
-                    placeholder="小写字母、数字、下划线" /></a-form-item
+                    :value="field.key"
+                    :disabled="frozenField(field)"
+                    placeholder="小写字母、数字、下划线"
+                    @update:value="(value) => setFieldKey(field, value)" /></a-form-item
                 ><a-form-item label="内容来源"
                   ><a-select
                     v-model:value="field.source"
-                    :disabled="Boolean(locked)"
+                    :disabled="frozenField(field) || field.roster_match"
                     :options="[
                       { value: 'user', label: '用户填写' },
                       { value: 'roster', label: '名单权威值（不公开回显）' },
@@ -391,27 +399,47 @@ onMounted(load);
                 ><a-input-textarea
                   v-model:value="optionDrafts[field.key]"
                   :rows="3"
-                  :disabled="Boolean(locked)"
+                  :disabled="frozenField(field)"
                   placeholder="design:设计\nengineering:研发" /></a-form-item
               ><a-form-item label="填写提示"
                 ><a-input v-model:value="field.help_text" placeholder="可选，帮助参与者准确填写"
               /></a-form-item>
               <div class="field-flags">
                 <label
+                  >允许重复<a-switch v-model:checked="field.allow_duplicates" size="small"
+                /></label>
+                <label
+                  v-if="
+                    ['text', 'textarea', 'email'].includes(field.type) &&
+                    (!field.allow_duplicates || field.roster_match)
+                  "
+                  >忽略大小写<a-switch v-model:checked="field.ignore_case" size="small"
+                /></label>
+                <label v-if="['text', 'phone', 'email'].includes(field.type)"
+                  >名单匹配<a-switch
+                    :checked="field.roster_match"
+                    size="small"
+                    :disabled="Boolean(locked)"
+                    @change="(value) => setRosterMatch(field, Boolean(value))"
+                /></label>
+                <label
                   >必填
                   <a-switch
                     v-model:checked="field.required"
                     size="small"
-                    :disabled="Boolean(locked)" /></label
+                    :disabled="Boolean(locked) || field.roster_match" /></label
                 ><label
                   >仅后台使用
                   <a-switch
                     :checked="field.visibility === 'admin'"
                     size="small"
-                    :disabled="Boolean(locked)"
+                    :disabled="frozenField(field) || field.roster_match"
                     @change="(v) => (field.visibility = v ? 'admin' : 'public')"
                 /></label>
               </div>
+              <p v-if="!field.allow_duplicates && !field.required" class="side-hint">
+                未填写时不参与重复校验。
+              </p>
             </div>
           </section>
         </div>
@@ -610,7 +638,8 @@ onMounted(load);
 }
 .field-flags {
   display: flex;
-  gap: 26px;
+  gap: 12px 20px;
+  flex-wrap: wrap;
   font-size: 12px;
   color: #7a866b;
 }
@@ -679,7 +708,14 @@ onMounted(load);
     padding: 16px;
   }
   .field-flags {
-    gap: 18px;
+    gap: 8px 16px;
+  }
+  .field-flags label {
+    min-height: 44px;
+  }
+  .field-card-top button {
+    min-width: 44px;
+    min-height: 44px;
   }
   .editor-savebar span {
     font-size: 11px;

@@ -3,7 +3,6 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import {
   Form as VanForm,
-  Field as VanField,
   CellGroup as VanCellGroup,
   Button as VanButton,
   Checkbox as VanCheckbox,
@@ -27,7 +26,6 @@ const publicId = String(useRoute().params.publicId),
   draftKey = `hn_draft_${publicId}`,
   attemptKey = `hn_attempt_${publicId}`,
   publicSession = ref<PublicSession>(),
-  identity = ref(''),
   answers = ref<Answers>({}),
   loading = ref(true),
   submitting = ref(false),
@@ -59,14 +57,13 @@ const draft = () => {
   sessionStorage.setItem(
     draftKey,
     JSON.stringify({
-      identity: identity.value,
       answers: answers.value,
       expires: Date.now() + 1800000,
     }),
   );
 };
 watch(
-  [identity, answers],
+  answers,
   () => {
     if (!result.value) draft();
   },
@@ -75,12 +72,13 @@ watch(
 async function initialize() {
   loading.value = true;
   error.value = '';
+  let legacyDraft = '';
   try {
     const saved = sessionStorage.getItem(draftKey);
     if (saved) {
-      const d = JSON.parse(saved) as { identity: string; answers: Answers; expires: number };
+      const d = JSON.parse(saved) as { identity?: string; answers: Answers; expires: number };
       if (d.expires > Date.now()) {
-        identity.value = d.identity;
+        legacyDraft = d.identity ?? '';
         answers.value = d.answers;
       } else sessionStorage.removeItem(draftKey);
     }
@@ -121,6 +119,16 @@ async function initialize() {
           })
         ).result;
       } else if (Date.parse(publicSession.value.expires_at) <= Date.now()) expired.value = true;
+    }
+    if (legacyDraft && publicSession.value) {
+      const field = publicSession.value.event.fields.find((f) => f.roster_match);
+      if (field && answers.value[field.key] === undefined) answers.value[field.key] = legacyDraft;
+    }
+    if (publicSession.value) {
+      const keys = new Set(publicSession.value.event.fields.map((field) => field.key));
+      answers.value = Object.fromEntries(
+        Object.entries(answers.value).filter(([key]) => keys.has(key)),
+      );
     }
     timer = setInterval(() => {
       now.value = Date.now();
@@ -186,7 +194,6 @@ async function submit() {
     return;
   }
   const body: CheckinInput = {
-    identity_value: identity.value,
     answers: { ...answers.value },
     ...(event.location_mode !== 'off' && locationData.value
       ? { location: { ...locationData.value } }
@@ -309,19 +316,8 @@ onBeforeUnmount(() => {
             请在 {{ remaining }} 秒内提交
           </p>
           <van-form :disabled="expired" scroll-to-error @submit="submit" @failed="formFailed"
-            ><van-cell-group class="checkin-fields"
-              ><van-field
-                v-model="identity"
-                :name="'identity_value'"
-                :label="publicSession.event.identity_label"
-                label-align="top"
-                :type="publicSession.event.identity_type === 'phone' ? 'tel' : 'text'"
-                :placeholder="`请输入${publicSession.event.identity_label}`"
-                :maxlength="120"
-                required
-                :rules="[
-                  { required: true, message: `请填写${publicSession.event.identity_label}` },
-                ]" /><MobileFields v-model="answers" :fields="publicSession.event.fields"
+            ><van-cell-group v-if="publicSession.event.fields.length" class="checkin-fields"
+              ><MobileFields v-model="answers" :fields="publicSession.event.fields"
             /></van-cell-group>
             <section v-if="publicSession.event.location_mode !== 'off'" class="location-card">
               <div class="location-heading">
@@ -353,7 +349,7 @@ onBeforeUnmount(() => {
             <section class="privacy-card">
               <p>
                 {{ publicSession.event.organizer }}
-                收集本次身份标识与表单信息，用于活动签到管理。签到资料在活动结束后保留
+                收集本次表单信息，用于活动签到管理。签到资料在活动结束后保留
                 {{ publicSession.event.retention_days }} 天。{{
                   publicSession.event.location_mode === 'off'
                     ? '本活动不采集位置。'

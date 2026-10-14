@@ -10,12 +10,22 @@ import { hash, verify } from '@node-rs/argon2';
 import { z } from 'zod';
 import {
   eventInputSchema,
+  rosterField,
+  rosterValue,
+  validateAnswers,
   checkinInputSchema,
   type EventInput,
+  type Answers,
   type ImportPreview,
   type Participant,
 } from '../../../packages/contracts/src/index.js';
 import { db, rows, execute, transaction } from './db.js';
+import {
+  rosterDigest,
+  rebuildFieldValues,
+  rebuildRosterValues,
+  rosterImportConflicts,
+} from './services/field-values.js';
 import { mapProxyReady, proxyMap } from './services/map-proxy.js';
 import { config, projectRoot } from './config.js';
 import {
@@ -28,11 +38,11 @@ import {
   safeEqual,
   signQr,
   verifyQr,
-  identityDigest,
 } from './services/security.js';
 import {
   fromEvent,
   getEvent,
+  getAdminEvent,
   available,
   audit,
   readCheckin,
@@ -82,6 +92,10 @@ const cookieOptions = {
   path: '/api',
 };
 export async function buildApp() {
+  const [migration] = await rows(db, 'SELECT name FROM schema_migrations WHERE name=?', [
+    '003_custom_fields.ts',
+  ]);
+  if (!migration) throw new Error('数据库需要更新，请先运行 npm run db:migrate');
   const app = Fastify({
     bodyLimit: 65536,
     trustProxy: config.TRUSTED_PROXIES
@@ -222,11 +236,12 @@ export async function buildApp() {
   app.get('/api/admin/events/:id', async (r) => {
     const id = getId(r);
     await authorize(r, id);
-    return { code: 'OK', event: await getEvent(id) };
+    return { code: 'OK', event: await getAdminEvent(id) };
   });
   app.post('/api/admin/events', async (r) => {
     const user = admin(r);
     const input = body(eventInputSchema, r);
+    if (input.fields.length > 30) fail('INVALID_FORM', '新活动最多 30 个字段');
     const id = await transaction(async (c) => {
       const created = await execute(c, 'INSERT INTO events(public_id,config) VALUES (?,?)', [
         randomToken(),
@@ -240,7 +255,7 @@ export async function buildApp() {
       await audit(c, user.id, id, 'CREATE_EVENT');
       return id;
     });
-    return { code: 'OK', event: await getEvent(id) };
+    return { code: 'OK', event: await getAdminEvent(id) };
   });
   app.get('/api/admin/map-config', async (r) => {
     admin(r);
@@ -266,9 +281,13 @@ export async function buildApp() {
     await transaction(async (c) => {
       const old = await getEvent(id, c, 'exclusive');
       if (old.state === 'CLOSED') fail('ACTIVITY_UNAVAILABLE', '已结束活动不能编辑');
-      if (old.state !== 'DRAFT') {
-        for (const key of ['identity_type', 'ignore_case'] as const)
-          if (old[key] !== input[key]) fail('INVALID_FORM', '发布后不能修改身份规则');
+      const [stored] = await rows<{ locked: number | string }>(
+        c,
+        'SELECT EXISTS(SELECT 1 FROM checkins WHERE event_id=?) OR EXISTS(SELECT 1 FROM participants WHERE event_id=?) AS locked',
+        [id, id],
+      );
+      const hasData = Number(stored?.locked ?? 0) > 0;
+      if (hasData) {
         for (const f of old.fields) {
           const updated = input.fields.find((x) => x.key === f.key);
           if (
@@ -278,32 +297,96 @@ export async function buildApp() {
             updated.source !== f.source ||
             updated.visibility !== f.visibility ||
             updated.max_length !== f.max_length ||
+            updated.roster_match !== f.roster_match ||
             JSON.stringify(updated.options.map((o) => o.key)) !==
               JSON.stringify(f.options.map((o) => o.key))
           )
-            fail('INVALID_FORM', '发布后只能调整字段文案或新增非必填字段');
+            fail('INVALID_FORM', '已有名单或签到，不能删除或改变已有字段结构');
         }
         if (input.fields.some((f) => !old.fields.some((x) => x.key === f.key) && f.required))
-          fail('INVALID_FORM', '发布后不能新增必填字段');
+          fail('INVALID_FORM', '发布后只能新增非必填字段');
       }
       if (input.location_mode === 'required' && !input.center && old.state !== 'DRAFT')
         fail('INVALID_FORM', '强制围栏需要活动中心');
       normalizeCenter(input);
+      if (input.fields.length > 30 && old.fields.length <= 30)
+        fail('INVALID_FORM', '最多 30 个字段');
+      if (old.state !== 'DRAFT' && input.admission === 'roster' && !rosterField(input))
+        fail('INVALID_FORM', '名单签到需要设置一个名单匹配字段');
+      const rules = (fields: EventInput['fields']) =>
+        fields
+          .filter((field) => !field.allow_duplicates || field.roster_match)
+          .map(({ key, type, allow_duplicates, ignore_case, roster_match }) => ({
+            key,
+            type,
+            allow_duplicates,
+            ignore_case,
+            roster_match,
+          }))
+          .sort((a, b) => a.key.localeCompare(b.key));
+      const fieldRulesChanged =
+        JSON.stringify(rules(old.fields)) !== JSON.stringify(rules(input.fields));
+      if (fieldRulesChanged) {
+        try {
+          await rebuildFieldValues(c, { ...input, id });
+          await rebuildRosterValues(c, { ...input, id });
+          const roster = await rows<{ answers: Answers | string }>(
+            c,
+            'SELECT answers FROM participants WHERE event_id=?',
+            [id],
+          );
+          if (
+            roster.length &&
+            rosterImportConflicts(
+              input,
+              roster.map((row) => decode(row.answers)),
+              [],
+              'update',
+            ).length
+          )
+            fail('INVALID_FORM', '现有名单中存在重复字段值，无法收紧重复规则');
+        } catch (error) {
+          if (
+            ['ER_DUP_ENTRY', 'ALREADY_SUBMITTED'].includes((error as { code?: string }).code ?? '')
+          )
+            fail('INVALID_FORM', '已有重复字段值，无法收紧重复规则；请调整数据或保持允许重复。');
+          if (error instanceof AppError) throw error;
+          fail('INVALID_FORM', '现有名单不符合新的匹配字段，请调整名单后重试');
+        }
+      }
       const formChanged = JSON.stringify(old.fields) !== JSON.stringify(input.fields);
-      const policyChanged = [
-        'starts_at',
-        'ends_at',
-        'admission',
-        'location_mode',
-        'center',
-        'radius',
-        'max_accuracy',
-        'conversion_error_budget',
-      ].some(
-        (k) =>
-          JSON.stringify(old[k as keyof EventInput]) !==
-          JSON.stringify(input[k as keyof EventInput]),
-      );
+      const structure = (fields: EventInput['fields']) =>
+        fields.map(
+          ({ key, type, required, source, visibility, max_length, options, roster_match }) => ({
+            key,
+            type,
+            required,
+            source,
+            visibility,
+            max_length,
+            options: options.map((o) => o.key),
+            roster_match,
+          }),
+        );
+      const structureChanged =
+        JSON.stringify(structure(old.fields)) !== JSON.stringify(structure(input.fields));
+      const policyChanged =
+        fieldRulesChanged ||
+        structureChanged ||
+        [
+          'starts_at',
+          'ends_at',
+          'admission',
+          'location_mode',
+          'center',
+          'radius',
+          'max_accuracy',
+          'conversion_error_budget',
+        ].some(
+          (k) =>
+            JSON.stringify(old[k as keyof EventInput]) !==
+            JSON.stringify(input[k as keyof EventInput]),
+        );
       await execute(
         c,
         'UPDATE events SET config=?,form_version=form_version+?,policy_epoch=policy_epoch+? WHERE id=?',
@@ -317,7 +400,7 @@ export async function buildApp() {
         ]);
       await audit(c, user.id, id, 'UPDATE_EVENT');
     });
-    return { code: 'OK', event: await getEvent(id) };
+    return { code: 'OK', event: await getAdminEvent(id) };
   });
   app.post('/api/admin/events/:id/publish', async (r) => {
     const user = admin(r),
@@ -328,6 +411,7 @@ export async function buildApp() {
       if (e.location_mode === 'required' && !e.center) fail('INVALID_FORM', '请先设置活动中心');
       normalizeCenter(e);
       if (e.admission === 'roster') {
+        if (!rosterField(e)) fail('INVALID_FORM', '请先设置名单匹配字段');
         const [count] = await rows<{ n: number }>(
           c,
           'SELECT COUNT(*) AS n FROM participants WHERE event_id=? AND active=TRUE',
@@ -456,8 +540,7 @@ export async function buildApp() {
         return e;
       });
       reply.setCookie(`hn_checkin_${selector}`, token, { ...cookieOptions, maxAge: 86520 });
-      const { ignore_case, center, conversion_error_budget, ...publicEvent } = e;
-      void ignore_case;
+      const { center, conversion_error_budget, ...publicEvent } = e;
       void center;
       void conversion_error_budget;
       publicEvent.fields = publicEvent.fields.filter(
@@ -527,10 +610,12 @@ export async function buildApp() {
       .parse(r.query);
     const where =
       'c.event_id=?' +
-      (q.search ? ' AND c.identity_value LIKE ?' : '') +
+      (q.search
+        ? ' AND (c.identity_value LIKE ? OR CAST(c.answers AS CHAR) LIKE ? OR CAST(c.id AS CHAR)=?)'
+        : '') +
       (q.status ? ' AND c.status=?' : '');
     const values: unknown[] = [id];
-    if (q.search) values.push(`%${q.search}%`);
+    if (q.search) values.push(`%${q.search}%`, `%${q.search}%`, q.search);
     if (q.status) values.push(q.status);
     const records = await rows<CheckinRow>(
       db,
@@ -656,17 +741,19 @@ export async function buildApp() {
       if (err instanceof AppError) throw err;
       return fail('INVALID_IMPORT', '文件无法解析，请检查 CSV / XLSX 格式');
     }
-    if (mode === 'add') {
-      for (const row of preview.rows) {
-        const found = await rows(
-          db,
-          'SELECT 1 FROM participants WHERE event_id=? AND identity_digest=?',
-          [id, identityDigest(e, row.identity_value)],
-        );
-        if (found.length)
-          preview.errors.push({ row: row.row, message: '此身份已存在，可选择按主键更新' });
-      }
-    }
+    const existing = await rows<{ answers: Answers | string }>(
+      db,
+      'SELECT answers FROM participants WHERE event_id=?',
+      [id],
+    );
+    preview.errors.push(
+      ...rosterImportConflicts(
+        e,
+        existing.map((row) => decode(row.answers)),
+        preview.rows,
+        mode,
+      ),
+    );
     const result = await execute(
       db,
       'INSERT INTO import_jobs(event_id,user_id,data,expires_at) VALUES (?,?,?,DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 24 HOUR))',
@@ -706,19 +793,34 @@ export async function buildApp() {
       if (data.errors.length) fail('INVALID_IMPORT', '请修正全部错误后重新上传');
       if (data.policy_epoch !== e.policy_epoch || data.form_version !== e.form_version)
         fail('RULE_CHANGED', '活动配置已变，请重新预览');
+      const current = await rows<{ answers: Answers | string }>(
+        c,
+        'SELECT answers FROM participants WHERE event_id=?',
+        [e.id],
+      );
+      const conflicts = rosterImportConflicts(
+        e,
+        current.map((row) => decode(row.answers)),
+        data.rows,
+        data.mode,
+      );
+      if (conflicts.length)
+        fail('CONFLICT', '名单数据已变或存在不允许重复的字段值，请重新预览', 409);
       for (const p of data.rows) {
-        const hash = identityDigest(e, p.identity_value);
+        const answers = validateAnswers(e.fields, p.answers, {}, 'import');
+        const value = rosterValue(e, answers);
+        const hash = rosterDigest(e, answers);
         if (data.mode === 'update')
           await execute(
             c,
             'INSERT INTO participants(event_id,identity_digest,identity_value,answers) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE answers=VALUES(answers)',
-            [e.id, hash, p.identity_value, JSON.stringify(p.answers)],
+            [e.id, hash, value, JSON.stringify(answers)],
           );
         else
           await execute(
             c,
             'INSERT INTO participants(event_id,identity_digest,identity_value,answers) VALUES (?,?,?,?)',
-            [e.id, hash, p.identity_value, JSON.stringify(p.answers)],
+            [e.id, hash, value, JSON.stringify(answers)],
           );
       }
       await execute(
@@ -733,7 +835,8 @@ export async function buildApp() {
   app.get('/api/admin/events/:id/template', async (r, reply) => {
     admin(r);
     const e = await getEvent(getId(r));
-    const columns = ['identity_value', ...e.fields.map((f) => f.key)];
+    if (!rosterField(e)) fail('INVALID_IMPORT', '请先在自定义字段中设置名单匹配字段');
+    const columns = e.fields.map((f) => f.key);
     return reply
       .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
       .header('Content-Disposition', 'attachment; filename="roster-template.xlsx"')
@@ -749,13 +852,12 @@ export async function buildApp() {
       [id],
     );
     const buffer = await workbookBuffer(
-      [e.identity_label, '状态', '签到时间', '来源', ...e.fields.map((f) => f.label)],
+      [...e.fields.map((f) => f.label), '状态', '签到时间', '来源'],
       list.map((c) => [
-        c.identity_value,
+        ...e.fields.map((f) => decode(c.answers)[f.key] ?? ''),
         c.status,
         c.checked_in_at.toISOString(),
         c.source,
-        ...e.fields.map((f) => decode(c.answers)[f.key] ?? ''),
       ]),
     );
     await audit(db, user.id, id, 'EXPORT_CHECKINS');

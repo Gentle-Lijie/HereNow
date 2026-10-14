@@ -2,6 +2,7 @@ import mysql, {
   type RowDataPacket,
   type ResultSetHeader,
   type PoolConnection,
+  type Connection,
 } from 'mysql2/promise';
 import { config } from './config.js';
 export const db = mysql.createPool({
@@ -17,7 +18,7 @@ export const db = mysql.createPool({
   decimalNumbers: true,
   charset: 'utf8mb4',
 });
-export type Sql = typeof db | PoolConnection;
+export type Sql = typeof db | PoolConnection | Connection;
 export async function rows<T>(sql: Sql, query: string, values: unknown[] = []): Promise<T[]> {
   const [r] = await sql.query<RowDataPacket[]>(query, values);
   return r as T[];

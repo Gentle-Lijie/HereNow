@@ -6,8 +6,13 @@ import ExcelJS from 'exceljs';
 import { buildApp } from '../apps/api/src/app.js';
 import { db, execute, rows } from '../apps/api/src/db.js';
 import { config } from '../apps/api/src/config.js';
-import { eventInputSchema, type EventRecord } from '../packages/contracts/src/index.js';
-import { randomToken, digest, identityDigest } from '../apps/api/src/services/security.js';
+import {
+  eventInputSchema,
+  fieldSchema,
+  type EventRecord,
+} from '../packages/contracts/src/index.js';
+import { randomToken, digest } from '../apps/api/src/services/security.js';
+import { rosterDigest } from '../apps/api/src/services/field-values.js';
 import { createTestAdmin } from './fixtures/admin.js';
 import { resetAdminPassword } from '../apps/api/src/services/accounts.js';
 let testAdmin: Awaited<ReturnType<typeof createTestAdmin>> | undefined;
@@ -53,13 +58,27 @@ class Client {
   }
 }
 async function create(overrides: Record<string, unknown> = {}) {
+  const fields: unknown[] = Array.isArray(overrides.fields)
+    ? overrides.fields
+    : [{ key: 'name', label: '姓名', type: 'text', required: true }];
   const input = eventInputSchema.parse({
     name: '自动化验收 · 临时活动',
     organizer: '仅测试',
     starts_at: new Date(Date.now() - 60000).toISOString(),
     ends_at: new Date(Date.now() + 3600000).toISOString(),
-    fields: [{ key: 'name', label: '姓名', type: 'text', required: true }],
     ...overrides,
+    fields: [
+      {
+        key: 'entry_code',
+        label: '编号',
+        type: 'text',
+        required: true,
+        allow_duplicates: false,
+        roster_match: true,
+        max_length: 120,
+      },
+      ...fields.map((f) => fieldSchema.parse(f)),
+    ],
   });
   const r = await admin.call('POST', '/api/admin/events', input);
   expect(r.statusCode).toBe(200);
@@ -79,8 +98,7 @@ async function publish(e: EventRecord) {
   return qr.json().token as string;
 }
 const submission = (identity = '000123') => ({
-  identity_value: identity,
-  answers: { name: '测试参与者' },
+  answers: { entry_code: identity, name: '测试参与者' },
 });
 const headers = (selector: string, key = randomUUID()) => ({
   'x-session-id': selector,
@@ -300,7 +318,12 @@ describe('real MySQL check-in transactions', () => {
     await execute(
       db,
       'INSERT INTO participants(event_id,identity_digest,identity_value,answers) VALUES (?,?,?,?)',
-      [e.id, identityDigest(e, '000001'), '000001', JSON.stringify({ department: '真实部门' })],
+      [
+        e.id,
+        rosterDigest(e, { entry_code: '000001' }),
+        '000001',
+        JSON.stringify({ entry_code: '000001', department: '真实部门' }),
+      ],
     );
     const token = await publish(e),
       c = await new Client().context(),
@@ -308,14 +331,14 @@ describe('real MySQL check-in transactions', () => {
     const bad = await c.call(
       'POST',
       '/api/public/checkins',
-      { identity_value: '999', answers: {} },
+      { answers: { entry_code: '999' } },
       headers(selector),
     );
     expect(bad.json().code).toBe('IDENTITY_NOT_ELIGIBLE');
     const good = await c.call(
       'POST',
       '/api/public/checkins',
-      { identity_value: '000001', answers: { department: '伪造' } },
+      { answers: { entry_code: '000001', department: '伪造' } },
       headers(selector),
     );
     expect(good.statusCode).toBe(200);
@@ -365,8 +388,7 @@ describe('real MySQL check-in transactions', () => {
     await publish(e);
     await admin.call('POST', `/api/admin/events/${e.id}/checkins/manual`, {
       submission: {
-        identity_value: '000001',
-        answers: { name: '=HYPERLINK("https://example.com")' },
+        answers: { entry_code: '000001', name: '=HYPERLINK("https://example.com")' },
       },
       reason: '测试',
       status: 'CHECKED_IN',
@@ -376,7 +398,7 @@ describe('real MySQL check-in transactions', () => {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(r.rawPayload as unknown as Parameters<typeof wb.xlsx.load>[0]);
     expect(wb.worksheets[0]!.getCell('A2').text).toBe('000001');
-    expect(wb.worksheets[0]!.getCell('E2').type).toBe(ExcelJS.ValueType.String);
+    expect(wb.worksheets[0]!.getCell('B2').type).toBe(ExcelJS.ValueType.String);
   });
   it('restricts operators by event grants and prevents exports', async () => {
     const name = `test_operator_${randomToken()}`;
@@ -431,18 +453,23 @@ describe('real MySQL check-in transactions', () => {
         'content-type': `multipart/form-data; boundary=${boundary}`,
       });
     }
-    const bad = await preview('identity_value,name\n000001,张三\n000001,李四');
+    const bad = await preview('entry_code,name\n000001,张三\n000001,李四');
     expect(bad.statusCode).toBe(200);
     expect(bad.json().preview.errors).toHaveLength(1);
     expect(
       (await admin.call('POST', `/api/admin/imports/${bad.json().preview.id}/commit`)).statusCode,
     ).toBe(400);
-    const good = await preview('identity_value,name\n000001,张三\n000002,李四');
+    const good = await preview('entry_code,name\n000001,张三\n000002,李四');
     expect(good.statusCode).toBe(200);
     await execute(
       db,
       'INSERT INTO participants(event_id,identity_digest,identity_value,answers) VALUES (?,?,?,?)',
-      [e.id, identityDigest(e, '000002'), '000002', '{"name":"已有记录"}'],
+      [
+        e.id,
+        rosterDigest(e, { entry_code: '000002' }),
+        '000002',
+        '{"entry_code":"000002","name":"已有记录"}',
+      ],
     );
     expect(
       (await admin.call('POST', `/api/admin/imports/${good.json().preview.id}/commit`)).statusCode,
@@ -453,6 +480,39 @@ describe('real MySQL check-in transactions', () => {
       [e.id],
     );
     expect(roster.map((p) => p.identity_value)).toEqual(['000002']);
+  });
+  it('rejects a cross-batch collision in a unique roster field after preview without committing partial rows', async () => {
+    const e = await create({
+      admission: 'roster',
+      fields: [
+        { key: 'phone', label: '手机号', type: 'phone', required: true, allow_duplicates: false },
+      ],
+    });
+    const boundary = 'roster-field-race';
+    const payload = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="mode"\r\n\r\nadd\r\n--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="roster.csv"\r\nContent-Type: text/csv\r\n\r\nentry_code,phone\n000001,13800138000\n000002,13800138002\r\n--${boundary}--\r\n`,
+    );
+    const preview = await admin.call('POST', `/api/admin/events/${e.id}/imports`, payload, {
+      'content-type': `multipart/form-data; boundary=${boundary}`,
+    });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json().preview.errors).toHaveLength(0);
+    const existing = { entry_code: '009999', phone: '13800138000' };
+    await execute(
+      db,
+      'INSERT INTO participants(event_id,identity_digest,identity_value,answers) VALUES (?,?,?,?)',
+      [e.id, rosterDigest(e, existing), '009999', JSON.stringify(existing)],
+    );
+    expect(
+      (await admin.call('POST', `/api/admin/imports/${preview.json().preview.id}/commit`))
+        .statusCode,
+    ).toBe(409);
+    const roster = await rows<{ identity_value: string }>(
+      db,
+      'SELECT identity_value FROM participants WHERE event_id=?',
+      [e.id],
+    );
+    expect(roster.map((p) => p.identity_value)).toEqual(['009999']);
   });
   it('rolls back SQL failures without consuming the only submission opportunity', async () => {
     const e = await create(),

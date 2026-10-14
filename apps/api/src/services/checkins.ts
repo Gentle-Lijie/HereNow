@@ -4,10 +4,11 @@ import type {
   Answers,
   Participant,
 } from '../../../../packages/contracts/src/index.js';
-import { normalizeIdentity, validateAnswers } from '../../../../packages/contracts/src/index.js';
+import { rosterValue, validateAnswers } from '../../../../packages/contracts/src/index.js';
 import { db, rows, execute, transaction, type Sql } from '../db.js';
 import { available, getEvent, readCheckin, decode } from './events.js';
-import { browserDigest, digest, identityDigest, encrypt, randomToken, fail } from './security.js';
+import { browserDigest, digest, encrypt, randomToken, fail } from './security.js';
+import { rosterDigest, claimFieldValues } from './field-values.js';
 import { locationDecision } from './location.js';
 interface Session {
   id: string;
@@ -29,15 +30,15 @@ export async function resolveSession(selector: string, token: string) {
   return r[0];
 }
 async function prepare(e: EventRecord, input: CheckinInput, sql: Sql) {
-  let identity: string;
-  try {
-    identity = normalizeIdentity(input.identity_value, e);
-  } catch (err) {
-    return fail('INVALID_FORM', (err as Error).message);
-  }
-  const hash = identityDigest(e, identity);
+  if (input.identity_value !== undefined) fail('INVALID_FORM', '请重新扫码并填写活动的自定义字段');
   let participant: Participant | undefined;
   if (e.admission === 'roster') {
+    let hash: Buffer;
+    try {
+      hash = rosterDigest(e, input.answers);
+    } catch (err) {
+      return fail('INVALID_FORM', (err as Error).message);
+    }
     const r = await rows<Participant>(
       sql,
       'SELECT * FROM participants WHERE event_id=? AND identity_digest=? FOR UPDATE',
@@ -56,6 +57,8 @@ async function prepare(e: EventRecord, input: CheckinInput, sql: Sql) {
   } catch (err) {
     return fail('INVALID_FORM', (err as Error).message);
   }
+  const identity = e.admission === 'roster' ? rosterValue(e, answers) : '';
+  const hash = digest(randomToken());
   return { identity, hash, participant, answers };
 }
 export async function submit(
@@ -110,12 +113,6 @@ export async function submit(
       if (!form) fail('INVALID_FORM', '表单版本不存在');
       event.fields = decode(form!.fields);
       const prepared = await prepare(event, input, c);
-      const existing = await rows<{ id: string }>(
-        c,
-        'SELECT id FROM checkins WHERE event_id=? AND identity_digest=?',
-        [event.id, prepared.hash],
-      );
-      if (existing.length) fail('ALREADY_SUBMITTED', '该身份已有记录，请现场核验', 409);
       const result = await execute(
         c,
         "INSERT INTO checkins(event_id,identity_digest,participant_id,identity_value,answers,status,source,checked_in_at,receipt_id,form_version,policy_epoch) VALUES (?,?,?,?,?,'CHECKED_IN','online',UTC_TIMESTAMP(3),?,?,?)",
@@ -131,12 +128,13 @@ export async function submit(
         ],
       );
       const id = String(result.insertId);
+      await claimFieldValues(c, event, prepared.answers, id);
       const [shared] = await rows<{ count: number }>(
         c,
         'SELECT COUNT(*) AS count FROM checkin_evidence x JOIN checkins y ON x.checkin_id=y.id WHERE y.event_id=? AND x.browser_digest=?',
         [event.id, browserDigest(browser)],
       );
-      const risks = Number(shared?.count ?? 0) > 0 ? ['同浏览器多身份'] : [];
+      const risks = Number(shared?.count ?? 0) > 0 ? ['同浏览器多次提交'] : [];
       await execute(
         c,
         'INSERT INTO checkin_evidence(checkin_id,encrypted_data,browser_digest,risk_flags,location_result,expires_at) VALUES (?,?,?,?,?,DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 7 DAY))',
@@ -169,7 +167,7 @@ export async function submit(
     });
   } catch (e) {
     if ((e as { code?: string }).code === 'ER_DUP_ENTRY')
-      fail('ALREADY_SUBMITTED', '该身份已有记录，请现场核验', 409);
+      fail('ALREADY_SUBMITTED', '不允许重复的字段值已有签到记录，请现场核验', 409);
     throw e;
   }
 }
@@ -182,12 +180,6 @@ export async function manual(
   if (event.state === 'DRAFT' || Date.now() < Date.parse(event.starts_at))
     fail('ACTIVITY_UNAVAILABLE', '活动未发布或尚未开始，不能进行人工补签');
   const p = await prepare(event, input, sql);
-  const existing = await rows(
-    sql,
-    'SELECT id FROM checkins WHERE event_id=? AND identity_digest=?',
-    [event.id, p.hash],
-  );
-  if (existing.length) fail('ALREADY_SUBMITTED', '该身份已有记录，请对原记录审核或恢复', 409);
   const result = await execute(
     sql,
     "INSERT INTO checkins(event_id,identity_digest,participant_id,identity_value,answers,status,source,checked_in_at,receipt_id,form_version,policy_epoch) VALUES (?,?,?,?,?,?,'manual',UTC_TIMESTAMP(3),?,?,?)",
@@ -203,5 +195,6 @@ export async function manual(
       event.policy_epoch,
     ],
   );
+  await claimFieldValues(sql, event, p.answers, String(result.insertId));
   return readCheckin(String(result.insertId), sql);
 }

@@ -48,6 +48,9 @@ try {
   });
   const input = eventInputSchema.parse({
     name: '压测临时活动',
+    fields: [
+      { key: 'entry_code', label: '编号', type: 'text', required: true, allow_duplicates: false },
+    ],
     organizer: '仅自动化测试',
     starts_at: new Date(Date.now() - 60000).toISOString(),
     ends_at: new Date(Date.now() + 3600000).toISOString(),
@@ -77,7 +80,7 @@ try {
       const r = await client.call(
         '/public/checkins',
         'POST',
-        { identity_value: `LOAD-${String(i).padStart(5, '0')}`, answers: {} },
+        { answers: { entry_code: `LOAD-${String(i).padStart(5, '0')}` } },
         { 'x-session-id': selector, 'Idempotency-Key': randomUUID() },
       );
       if (r.code !== 'CHECKED_IN') throw new Error('Missing success receipt');

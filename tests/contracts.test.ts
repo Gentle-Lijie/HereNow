@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   eventInputSchema,
   fieldSchema,
-  normalizeIdentity,
+  normalizeFieldValue,
+  canonicalFieldValue,
+  upgradeLegacyEventConfig,
   validateAnswers,
   locationSchema,
 } from '../packages/contracts/src/index.js';
@@ -14,15 +16,69 @@ const event = eventInputSchema.parse({
   ends_at: '2027-01-01T00:00:00Z',
 });
 describe('identity and field boundaries', () => {
+  it('keeps entered text and stable choice keys while comparing canonical values', () => {
+    const field = fieldSchema.parse({
+      key: 'code',
+      label: '编号',
+      type: 'text',
+      allow_duplicates: false,
+      ignore_case: true,
+    });
+    expect(validateAnswers([field], { code: ' AbC ' }).code).toBe(' AbC ');
+    expect(canonicalFieldValue(field, ' AbC ')).toBe(canonicalFieldValue(field, 'abc'));
+    const select = fieldSchema.parse({
+      key: 'choice',
+      label: '选择',
+      type: 'select',
+      options: [{ key: 'Ａ', label: '全角键' }],
+    });
+    expect(validateAnswers([select], { choice: 'Ａ' }).choice).toBe('Ａ');
+    const migrated = upgradeLegacyEventConfig({
+      ...event,
+      fields: [{ key: 'entry_code', label: '已有字段', type: 'text' }],
+      identity_type: 'registration',
+      identity_label: '报名号',
+      ignore_case: false,
+    });
+    expect(migrated.fields.map((f) => f.key)).toEqual(['entry_code_1', 'entry_code']);
+  });
+  it('defaults to duplicate values being allowed without a required identity field', () => {
+    expect(event.fields).toHaveLength(0);
+    expect(fieldSchema.parse({ key: 'name', label: '姓名', type: 'text' }).allow_duplicates).toBe(
+      true,
+    );
+    expect(eventInputSchema.safeParse({ ...event, identity_type: 'registration' }).success).toBe(
+      false,
+    );
+  });
+  it('canonicalizes multi-select order and migrates legacy identifiers into visible fields', () => {
+    expect(canonicalFieldValue({ type: 'multiselect', ignore_case: false }, ['b', 'a'])).toBe(
+      canonicalFieldValue({ type: 'multiselect', ignore_case: false }, ['a', 'b']),
+    );
+    const migrated = upgradeLegacyEventConfig({
+      ...event,
+      identity_type: 'registration',
+      identity_label: '报名号',
+      ignore_case: true,
+    });
+    expect(migrated.fields[0]).toMatchObject({
+      key: 'entry_code',
+      label: '报名号',
+      required: true,
+      allow_duplicates: false,
+      ignore_case: true,
+    });
+    expect('identity_type' in migrated).toBe(false);
+  });
   it('preserves leading zeros and only folds case when configured', () => {
-    expect(normalizeIdentity(' 000ABC ', event)).toBe('000ABC');
-    expect(normalizeIdentity('000ABC', { ...event, ignore_case: true })).toBe('000abc');
+    expect(normalizeFieldValue({ type: 'text', ignore_case: false }, ' 000ABC ')).toBe('000ABC');
+    expect(normalizeFieldValue({ type: 'text', ignore_case: true }, '000ABC')).toBe('000abc');
   });
   it('normalizes mainland phone numbers but rejects invalid identities', () => {
-    expect(normalizeIdentity('+86 138-0013-8000', { ...event, identity_type: 'phone' })).toBe(
+    expect(normalizeFieldValue({ type: 'phone', ignore_case: false }, '+86 138-0013-8000')).toBe(
       '13800138000',
     );
-    expect(() => normalizeIdentity('张三', { ...event, identity_type: 'phone' })).toThrow();
+    expect(() => normalizeFieldValue({ type: 'phone', ignore_case: false }, '张三')).toThrow();
   });
   it('rejects unknown fields and validates types and enum keys', () => {
     const f = fieldSchema.parse({

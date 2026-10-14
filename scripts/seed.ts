@@ -13,8 +13,16 @@ try {
       starts_at: new Date(Date.now() - 3600000).toISOString(),
       ends_at: new Date(Date.now() + 7 * 86400000).toISOString(),
       location_label: '上海 · 创意空间',
-      identity_label: '报名编号',
       fields: [
+        {
+          key: 'entry_code',
+          label: '报名编号',
+          type: 'text',
+          required: true,
+          allow_duplicates: false,
+          roster_match: true,
+          max_length: 120,
+        },
         { key: 'name', label: '姓名', type: 'text', required: true },
         { key: 'department', label: '团队 / 部门', type: 'text', required: false },
       ],

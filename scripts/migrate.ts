@@ -1,5 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import mysql from 'mysql2/promise';
+import { pathToFileURL } from 'node:url';
+import { resolve } from 'node:path';
 import { config } from '../apps/api/src/config.js';
 const c = await mysql.createConnection({
   host: config.DB_HOST,
@@ -19,10 +21,16 @@ try {
   );
   const [done] = await c.query<mysql.RowDataPacket[]>('SELECT name FROM schema_migrations');
   for (const file of (await readdir('database/migrations'))
-    .filter((f) => f.endsWith('.sql'))
+    .filter((f) => f.endsWith('.sql') || f.endsWith('.ts'))
     .sort()) {
     if (done.some((r) => r.name === file)) continue;
-    await c.query(await readFile(`database/migrations/${file}`, 'utf8'));
+    if (file.endsWith('.sql')) await c.query(await readFile(`database/migrations/${file}`, 'utf8'));
+    else {
+      const migration = (await import(
+        pathToFileURL(resolve('database/migrations', file)).href
+      )) as { up: (connection: mysql.Connection) => Promise<void> };
+      await migration.up(c);
+    }
     await c.query('INSERT INTO schema_migrations(name) VALUES (?)', [file]);
     console.log(`Applied ${file}`);
   }

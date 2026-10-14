@@ -8,12 +8,23 @@ const e = eventInputSchema.parse({
   organizer: '测试',
   starts_at: '2026-01-01T00:00:00Z',
   ends_at: '2027-01-01T00:00:00Z',
-  fields: [{ key: 'name', label: '姓名', type: 'text', required: true }],
+  fields: [
+    {
+      key: 'entry_code',
+      label: '员工编号',
+      type: 'text',
+      required: true,
+      roster_match: true,
+      allow_duplicates: false,
+      max_length: 120,
+    },
+    { key: 'name', label: '姓名', type: 'text', required: true },
+  ],
 });
 describe('safe spreadsheet boundaries', () => {
   it('preserves text identities and detects normalized duplicates', async () => {
     const r = await parseImport(
-      Buffer.from('identity_value,name\n000001,张三\n 000001 ,李四\n'),
+      Buffer.from('entry_code,name\n000001,张三\n 000001 ,李四\n'),
       'roster.csv',
       e,
     );
@@ -22,7 +33,7 @@ describe('safe spreadsheet boundaries', () => {
   });
   it('supports explicit column mapping', async () => {
     const r = await parseImport(Buffer.from('员工编号,名字\n000001,张三\n'), 'roster.csv', e, {
-      identity_value: '员工编号',
+      entry_code: '员工编号',
       name: '名字',
     });
     expect(r.errors).toHaveLength(0);
@@ -31,7 +42,7 @@ describe('safe spreadsheet boundaries', () => {
   it('rejects XLSX formula cells and numeric identities', async () => {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('名单');
-    ws.addRow(['identity_value', 'name']);
+    ws.addRow(['entry_code', 'name']);
     ws.addRow(['000001', { formula: '1+1', result: 2 }]);
     await expect(
       parseImport(Buffer.from(await wb.xlsx.writeBuffer()), 'roster.xlsx', e),
@@ -42,7 +53,7 @@ describe('safe spreadsheet boundaries', () => {
     expect(r.errors[0]?.message).toContain('文本');
   });
   it('writes text including formula-like strings as XLSX string values', async () => {
-    const b = await workbookBuffer(['identity_value', 'name'], [['000001', '=1+1']]);
+    const b = await workbookBuffer(['entry_code', 'name'], [['000001', '=1+1']]);
     const r = await parseImport(b, 'roster.xlsx', e);
     expect(r.errors).toHaveLength(0);
     expect(r.rows[0]?.answers.name).toBe('=1+1');

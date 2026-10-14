@@ -4,10 +4,6 @@ import { config } from '../config.js';
 import type { EventRecord } from '../../../../packages/contracts/src/index.js';
 export const randomToken = () => randomBytes(24).toString('base64url');
 export const digest = (value: string) => createHash('sha256').update(value).digest();
-export const identityDigest = (event: Pick<EventRecord, 'id' | 'identity_type'>, value: string) =>
-  createHmac('sha256', config.IDENTITY_SECRET)
-    .update(JSON.stringify([event.id, event.identity_type, value]))
-    .digest();
 export const browserDigest = (value: string) =>
   createHmac('sha256', config.IDENTITY_SECRET).update(`browser:${value}`).digest();
 export const csrf = (browser: string) =>

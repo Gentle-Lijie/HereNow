@@ -5,6 +5,7 @@ import type {
   Answers,
   CheckinRecord,
 } from '../../../../packages/contracts/src/index.js';
+import { upgradeLegacyEventConfig } from '../../../../packages/contracts/src/index.js';
 import { db, rows, execute, type Sql } from '../db.js';
 import { fail } from './security.js';
 export interface EventRow {
@@ -21,7 +22,7 @@ export interface EventRow {
 }
 export const decode = <T>(v: T | string): T => (typeof v === 'string' ? (JSON.parse(v) as T) : v);
 export const fromEvent = (r: EventRow): EventRecord => ({
-  ...decode(r.config),
+  ...upgradeLegacyEventConfig(decode(r.config)),
   id: String(r.id),
   public_id: r.public_id,
   state: r.state,
@@ -97,4 +98,14 @@ export async function readCheckin(id: string, sql: Sql = db) {
   );
   if (!r[0]) return fail('NOT_FOUND', '记录不存在', 404);
   return fromCheckin(r[0]);
+}
+
+export async function getAdminEvent(id: string) {
+  const event = await getEvent(id);
+  const [data] = await rows<{ locked: number | string }>(
+    db,
+    'SELECT EXISTS(SELECT 1 FROM checkins WHERE event_id=?) OR EXISTS(SELECT 1 FROM participants WHERE event_id=?) AS locked',
+    [id, id],
+  );
+  return { ...event, configuration_locked: Number(data?.locked ?? 0) > 0 };
 }

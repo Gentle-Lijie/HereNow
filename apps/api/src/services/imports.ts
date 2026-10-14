@@ -2,7 +2,9 @@ import ExcelJS from 'exceljs';
 import { parse } from 'csv-parse/sync';
 import { unzipSync } from 'fflate';
 import {
-  normalizeIdentity,
+  rosterField,
+  rosterValue,
+  canonicalFieldValue,
   validateAnswers,
   type Answers,
   type EventInput,
@@ -35,6 +37,8 @@ export async function parseImport(
   mapping: Record<string, string> = {},
   sheet?: string,
 ): Promise<Omit<ImportPreview, 'id'>> {
+  const matchField = rosterField(event);
+  if (!matchField) return fail('INVALID_IMPORT', '请先设置名单匹配字段');
   let grid: string[][] = [];
   const numericIdentityRows = new Set<number>();
   if (filename.toLowerCase().endsWith('.csv')) {
@@ -67,14 +71,14 @@ export async function parseImport(
     if (ws!.rowCount > 10001 || ws!.columnCount > 40)
       fail('INVALID_IMPORT', '最多 10,000 行、40 列');
     grid = [];
-    const identityHeader = mapping.identity_value ?? 'identity_value';
+    const identityHeader = mapping[matchField.key] ?? matchField.key;
     let identityIndex = 1;
     ws!.eachRow((row, n) => {
       if (n === 1) {
         row.eachCell((cell, col) => {
           if (
             cell.text === identityHeader ||
-            (!mapping.identity_value && cell.text === event.identity_label)
+            (!mapping[matchField.key] && cell.text === matchField.label)
           )
             identityIndex = col;
         });
@@ -96,11 +100,12 @@ export async function parseImport(
   const columns = grid[0]!.map((v) => v.trim());
   if (new Set(columns).size !== columns.length) fail('INVALID_IMPORT', '列标题不能重复');
   const identityHeader =
-    mapping.identity_value ??
-    (columns.includes('identity_value') ? 'identity_value' : event.identity_label);
+    mapping[matchField.key] ??
+    (columns.includes(matchField.key) ? matchField.key : matchField.label);
   const identityIndex = columns.indexOf(identityHeader);
-  if (identityIndex < 0) fail('INVALID_IMPORT', `找不到身份列 ${identityHeader}，请检查列映射`);
+  if (identityIndex < 0) fail('INVALID_IMPORT', `找不到名单匹配列 ${identityHeader}，请检查列映射`);
   const seen = new Set<string>();
+  const uniqueValues = new Map<string, Set<string>>();
   const result: Omit<ImportPreview, 'id'> = {
     rows: [],
     errors: [],
@@ -111,17 +116,37 @@ export async function parseImport(
     const row = grid[i];
     if (!row) continue;
     try {
-      if (numericIdentityRows.has(i + 1)) throw new Error('身份单元格必须为文本，避免丢失前导零');
-      const identity = normalizeIdentity(row[identityIndex] ?? '', event);
-      if (seen.has(identity)) throw new Error('规范化后身份重复');
-      seen.add(identity);
+      if (numericIdentityRows.has(i + 1))
+        throw new Error('名单匹配单元格必须为文本，避免丢失前导零');
       const answers: Answers = {};
       for (const f of event.fields) {
-        const col = columns.indexOf(mapping[f.key] ?? f.key);
+        const col =
+          f.key === matchField.key
+            ? identityIndex
+            : columns.indexOf(mapping[f.key] ?? (columns.includes(f.key) ? f.key : f.label));
         if (col >= 0 && row[col] !== undefined && row[col] !== '')
           answers[f.key] = convertCell(row[col]!, f);
       }
       const validated = validateAnswers(event.fields, answers, {}, 'import');
+      const identity = rosterValue(event, validated);
+      if (seen.has(identity)) throw new Error('规范化后名单匹配值重复');
+      for (const field of event.fields.filter((f) => !f.allow_duplicates)) {
+        const value = validated[field.key];
+        if (value === undefined || value === '' || (Array.isArray(value) && !value.length))
+          continue;
+        const canonical = canonicalFieldValue(field, value);
+        if (uniqueValues.get(field.key)?.has(canonical))
+          throw new Error(`${field.label}不允许重复`);
+      }
+      seen.add(identity);
+      for (const field of event.fields.filter((f) => !f.allow_duplicates)) {
+        const value = validated[field.key];
+        if (value === undefined || value === '' || (Array.isArray(value) && !value.length))
+          continue;
+        const values = uniqueValues.get(field.key) ?? new Set<string>();
+        values.add(canonicalFieldValue(field, value));
+        uniqueValues.set(field.key, values);
+      }
       result.rows.push({ row: i + 1, identity_value: identity, answers: validated });
     } catch (e) {
       result.errors.push({ row: i + 1, message: (e as Error).message });

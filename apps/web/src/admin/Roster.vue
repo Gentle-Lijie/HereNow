@@ -16,6 +16,7 @@ import {
   CheckCircleOutlined,
   FileTextOutlined,
 } from '@ant-design/icons-vue';
+import { rosterField } from '../../../../packages/contracts/src/index';
 import type {
   EventRecord,
   Participant,
@@ -32,15 +33,18 @@ const id = String(useRoute().params.id),
   sheet = ref(''),
   mapping = ref<Record<string, string>>({}),
   preview = ref<ImportPreview>();
-const columns = [
-  { title: '身份标识', dataIndex: 'identity_value', key: 'identity_value' },
+const columns = computed(() => [
+  {
+    title: rosterField(event.value ?? { fields: [] })?.label ?? '名单匹配值',
+    dataIndex: 'identity_value',
+    key: 'identity_value',
+  },
   { title: '名单资料', key: 'answers' },
   { title: '资格状态', key: 'active' },
-];
-const mappingFields = computed(() => [
-  { key: 'identity_value', label: event.value?.identity_label ?? '身份标识' },
-  ...(event.value?.fields ?? []).map((f) => ({ key: f.key, label: f.label })),
 ]);
+const mappingFields = computed(() =>
+  (event.value?.fields ?? []).map((f) => ({ key: f.key, label: f.label })),
+);
 async function refresh() {
   try {
     event.value = (await api<{ event: EventRecord }>(`/admin/events/${id}`)).event;
@@ -138,7 +142,9 @@ onMounted(refresh);
         <h1>参与名单</h1>
         <p>{{ event?.name }}</p>
       </div>
-      <a v-if="session.user?.role === 'admin'" :href="`/api/admin/events/${id}/template`"
+      <a
+        v-if="session.user?.role === 'admin' && rosterField(event ?? { fields: [] })"
+        :href="`/api/admin/events/${id}/template`"
         ><a-button><DownloadOutlined /> 下载导入模板</a-button></a
       >
     </div>
@@ -152,7 +158,13 @@ onMounted(refresh);
       仅管理员可以查看与管理完整名单。
     </div>
     <template v-else
-      ><section class="panel import-panel">
+      ><div v-if="!rosterField(event ?? { fields: [] })" class="error-banner" role="alert">
+        请先在活动配置的自定义字段中指定一个“名单匹配”字段，再导入名单。<RouterLink
+          :to="`/admin/events/${id}`"
+          >前往活动配置</RouterLink
+        >
+      </div>
+      <section class="panel import-panel">
         <div class="import-heading">
           <div>
             <h2 class="panel-title">导入名单</h2>
@@ -165,10 +177,11 @@ onMounted(refresh);
             type="file"
             accept=".csv,.xlsx"
             aria-label="选择名单文件"
+            :disabled="!rosterField(event ?? { fields: [] })"
             @change="selectFile"
           /><span class="upload-icon"><UploadOutlined /></span
           ><strong>{{ file ? file.name : '点击选择参与名单' }}</strong
-          ><span>单次最多 5 MB、10,000 行；身份列请使用文本，保留前导零。</span></label
+          ><span>单次最多 5 MB、10,000 行；名单匹配列请使用文本，保留前导零。</span></label
         >
         <div class="import-options form-grid">
           <label class="field-group"
@@ -178,7 +191,7 @@ onMounted(refresh);
               style="width: 100%"
               :options="[
                 { value: 'add', label: '仅新增 · 已存在身份报错' },
-                { value: 'update', label: '按主键更新 · 不覆盖历史签到' },
+                { value: 'update', label: '按匹配字段更新 · 不覆盖历史签到' },
               ]" /></label
           ><label class="field-group"
             ><span class="field-label">工作表名称（可选）</span
@@ -225,7 +238,7 @@ onMounted(refresh);
             <thead>
               <tr>
                 <th>行号</th>
-                <th>{{ event?.identity_label }}</th>
+                <th>{{ rosterField(event ?? { fields: [] })?.label ?? '名单匹配值' }}</th>
                 <th>名单资料</th>
               </tr>
             </thead>

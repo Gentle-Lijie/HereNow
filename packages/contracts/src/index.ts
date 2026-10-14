@@ -13,10 +13,7 @@ export const fieldTypes = [
 const safeKey = z
   .string()
   .regex(/^[a-z][a-z0-9_]{0,39}$/)
-  .refine(
-    (v) => !['identity_value', 'constructor', 'prototype', '__proto__'].includes(v),
-    '字段键为保留名称',
-  );
+  .refine((v) => !['constructor', 'prototype', '__proto__'].includes(v), '字段键为保留名称');
 export const fieldSchema = z
   .object({
     key: safeKey,
@@ -30,10 +27,27 @@ export const fieldSchema = z
     help_text: z.string().max(300).default(''),
     visibility: z.enum(['public', 'admin']).default('public'),
     source: z.enum(['user', 'roster']).default('user'),
+    allow_duplicates: z.boolean().default(true),
+    ignore_case: z.boolean().default(false),
+    roster_match: z.boolean().default(false),
     max_length: z.number().int().min(1).max(2000).default(2000),
   })
   .strict()
   .superRefine((f, c) => {
+    if (
+      f.roster_match &&
+      (!['text', 'phone', 'email'].includes(f.type) ||
+        !f.required ||
+        f.visibility !== 'public' ||
+        f.source !== 'user' ||
+        f.max_length > 120)
+    )
+      c.addIssue({
+        code: 'custom',
+        message: '名单匹配字段须为必填的公开文本、手机号或邮箱，用户填写且长度不超过 120。',
+      });
+    if (f.ignore_case && !['text', 'textarea', 'email'].includes(f.type))
+      c.addIssue({ code: 'custom', message: '只有文本与邮箱字段支持忽略大小写。' });
     if (
       ['select', 'multiselect'].includes(f.type) &&
       (!f.options.length || new Set(f.options.map((o) => o.key)).size !== f.options.length)
@@ -62,10 +76,7 @@ export const eventInputSchema = z
       }, '无效时区'),
     location_label: z.string().max(200).default(''),
     admission: z.enum(['open', 'roster']).default('open'),
-    identity_label: z.string().min(1).max(60).default('报名编号'),
-    identity_type: z.enum(['registration', 'employee', 'student', 'phone']).default('registration'),
-    ignore_case: z.boolean().default(false),
-    fields: z.array(fieldSchema).max(30).default([]),
+    fields: z.array(fieldSchema).max(31).default([]),
     location_mode: z.enum(['off', 'record', 'required']).default('off'),
     center: z
       .object({
@@ -88,6 +99,8 @@ export const eventInputSchema = z
       c.addIssue({ code: 'custom', path: ['ends_at'], message: '结束时间必须晚于开始时间' });
     if (new Set(e.fields.map((f) => f.key)).size !== e.fields.length)
       c.addIssue({ code: 'custom', path: ['fields'], message: '字段键不能重复' });
+    if (e.fields.filter((f) => f.roster_match).length > 1)
+      c.addIssue({ code: 'custom', message: '只能选择一个名单匹配字段。' });
     if (e.admission === 'open' && e.fields.some((f) => f.source === 'roster'))
       c.addIssue({ code: 'custom', message: '名单权威字段仅用于名单模式' });
   });
@@ -106,6 +119,7 @@ export interface EventRecord extends EventInput {
   created_at: string;
   checkin_count: number;
   participant_count: number;
+  configuration_locked?: boolean;
   pending_count: number;
 }
 export interface CheckinRecord {
@@ -145,7 +159,8 @@ export const locationSchema = z
 export type LocationInput = z.infer<typeof locationSchema>;
 export const checkinInputSchema = z
   .object({
-    identity_value: z.string().min(1).max(120),
+    // Legacy bodies remain parseable so a completed idempotent request can be recovered.
+    identity_value: z.string().min(1).max(120).optional(),
     answers: z.record(
       z.string(),
       z.union([
@@ -160,23 +175,64 @@ export const checkinInputSchema = z
   .strict();
 export type CheckinInput = z.infer<typeof checkinInputSchema>;
 export interface PublicSession {
-  event: Omit<EventInput, 'ignore_case' | 'center' | 'conversion_error_budget'>;
+  event: Omit<EventInput, 'center' | 'conversion_error_budget'>;
   session_id: string;
   expires_at: string;
   server_time: string;
 }
-export const normalizeIdentity = (
-  value: string,
-  event: Pick<EventInput, 'identity_type' | 'ignore_case'>,
-) => {
-  let v = value.trim().normalize('NFKC');
-  if (event.identity_type === 'phone') {
-    v = v.replace(/[\s()-]/g, '').replace(/^\+86/, '');
-    if (!/^1[3-9]\d{9}$/.test(v)) throw new Error('请输入有效的中国大陆手机号');
+export function normalizeFieldValue(
+  field: Pick<Field, 'type' | 'ignore_case'>,
+  value: Answer,
+): Answer {
+  if (typeof value !== 'string') return Array.isArray(value) ? [...new Set(value)].sort() : value;
+  if (!['text', 'textarea', 'phone', 'email'].includes(field.type)) return value;
+  let text = value.trim().normalize('NFKC');
+  if (field.type === 'phone') {
+    text = text.replace(/[\s()-]/g, '').replace(/^\+86/, '');
+    if (!/^1[3-9]\d{9}$/.test(text)) throw new Error('请输入有效的中国大陆手机号');
   }
-  if (!v || v.length > 120) throw new Error('身份标识格式不正确');
-  return event.ignore_case ? v.toLocaleLowerCase('en-US') : v;
-};
+  return field.ignore_case ? text.toLocaleLowerCase('en-US') : text;
+}
+export function canonicalFieldValue(
+  field: Pick<Field, 'type' | 'ignore_case'>,
+  value: Answer,
+): string {
+  return JSON.stringify(normalizeFieldValue(field, value));
+}
+export const rosterField = (event: Pick<EventInput, 'fields'>) =>
+  event.fields.find((field) => field.roster_match);
+export function rosterValue(event: Pick<EventInput, 'fields'>, answers: Answers): string {
+  const field = rosterField(event);
+  if (!field) throw new Error('请先设置名单匹配字段');
+  const value = answers[field.key];
+  if (typeof value !== 'string') throw new Error(`请填写${field.label}`);
+  const normalized = normalizeFieldValue(field, value);
+  if (typeof normalized !== 'string' || !normalized || normalized.length > 120)
+    throw new Error(`${field.label}格式或长度不正确`);
+  return normalized;
+}
+// Read old persisted configurations without creating a hidden system field in new activities.
+export function upgradeLegacyEventConfig(config: unknown): EventInput {
+  if (!config || typeof config !== 'object' || Array.isArray(config))
+    throw new Error('活动配置无效');
+  const data = config as Record<string, unknown>;
+  if (typeof data.identity_type !== 'string') return eventInputSchema.parse(config);
+  const { identity_type, identity_label, ignore_case, ...rest } = data;
+  const fields = z.array(fieldSchema).parse(data.fields ?? []);
+  let key = 'entry_code';
+  for (let i = 1; fields.some((field) => field.key === key); i++) key = `entry_code_${i}`;
+  const field = fieldSchema.parse({
+    key,
+    label: identity_label ?? '编号',
+    type: identity_type === 'phone' ? 'phone' : 'text',
+    required: true,
+    allow_duplicates: false,
+    ignore_case: Boolean(ignore_case) && identity_type !== 'phone',
+    roster_match: true,
+    max_length: 120,
+  });
+  return eventInputSchema.parse({ ...rest, fields: [field, ...fields] });
+}
 export function validateAnswers(
   fields: Field[],
   answers: Answers,
@@ -190,10 +246,14 @@ export function validateAnswers(
   }
   for (const field of fields) {
     if (mode === 'public' && field.visibility === 'admin') continue;
-    const value =
+    let value =
       mode === 'public' && field.source === 'roster' ? roster[field.key] : answers[field.key];
+    if (typeof value === 'string' && value.trim() !== '' && field.type === 'phone')
+      value = normalizeFieldValue({ ...field, ignore_case: false }, value);
     const empty =
-      value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+      value === undefined ||
+      (typeof value === 'string' && value.trim() === '') ||
+      (Array.isArray(value) && value.length === 0);
     if (empty) {
       if (field.required) throw new Error(`请填写${field.label}`);
       continue;

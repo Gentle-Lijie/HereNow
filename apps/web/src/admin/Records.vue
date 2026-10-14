@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   Button as AButton,
@@ -28,6 +28,7 @@ import {
   type CheckinRecord,
 } from '../../../../packages/contracts/src/index';
 import { api, errorMessage, formatTime, session } from '../services/api';
+import { formatAnswer } from '../services/fields';
 import AdminFields from './AdminFields.vue';
 const id = String(useRoute().params.id),
   router = useRouter(),
@@ -43,7 +44,6 @@ const id = String(useRoute().params.id),
   manualOpen = ref(false),
   reviewOpen = ref(false),
   selected = ref<CheckinRecord>(),
-  identity = ref(''),
   answers = ref<Answers>({}),
   reason = ref(''),
   manualStatus = ref<'CHECKED_IN' | 'PENDING_REVIEW'>('CHECKED_IN'),
@@ -52,13 +52,18 @@ const id = String(useRoute().params.id),
 let timer: ReturnType<typeof setTimeout> | undefined;
 let loadEpoch = 0;
 let alive = true;
-const columns = [
-  { title: '身份标识', dataIndex: 'identity_value', key: 'identity_value' },
+const columns = computed(() => [
+  { title: '签到编号', dataIndex: 'id', key: 'id' },
+  ...(event.value?.fields.slice(0, 3) ?? []).map((f) => ({
+    title: f.label,
+    dataIndex: ['answers', f.key],
+    key: `field:${f.key}`,
+  })),
   { title: '签到状态', key: 'status' },
   { title: '签到时间', key: 'time' },
   { title: '来源 / 风险', key: 'risk' },
   { title: '操作', key: 'actions' },
-];
+]);
 async function load() {
   const epoch = ++loadEpoch;
   loading.value = true;
@@ -96,7 +101,6 @@ async function display() {
   }
 }
 function openManual() {
-  identity.value = '';
   answers.value = {};
   reason.value = '';
   manualStatus.value = 'CHECKED_IN';
@@ -105,8 +109,7 @@ function openManual() {
 async function manual() {
   busy.value = true;
   try {
-    if (!identity.value.trim() || !reason.value.trim())
-      throw new Error('请填写身份标识与人工补签原因');
+    if (!reason.value.trim()) throw new Error('请填写人工补签原因');
     validateAnswers(
       (event.value?.fields ?? []).filter((f) => f.source === 'user' && f.visibility === 'public'),
       answers.value,
@@ -116,7 +119,7 @@ async function manual() {
     await api(`/admin/events/${id}/checkins/manual`, {
       method: 'POST',
       body: {
-        submission: { identity_value: identity.value, answers: answers.value },
+        submission: { answers: answers.value },
         reason: reason.value,
         status: manualStatus.value,
       },
@@ -198,8 +201,8 @@ onBeforeUnmount(() => {
       <div class="records-toolbar">
         <a-input
           v-model:value="search"
-          aria-label="搜索身份标识"
-          placeholder="搜索身份标识"
+          aria-label="搜索填写内容或签到编号"
+          placeholder="搜索填写内容或签到编号"
           allow-clear
           ><template #prefix><SearchOutlined /></template></a-input
         ><a-select
@@ -227,6 +230,12 @@ onBeforeUnmount(() => {
             }
           "
           ><template #bodyCell="{ column, record }"
+            ><template v-if="String(column.key).startsWith('field:')">{{
+              formatAnswer(
+                event?.fields.find((f) => `field:${f.key}` === column.key),
+                record.answers[String(column.key).slice(6)],
+              )
+            }}</template
             ><template v-if="column.key === 'status'"
               ><span class="status-pill" :class="record.status">{{
                 checkinLabels[record.status as keyof typeof checkinLabels]
@@ -265,7 +274,7 @@ onBeforeUnmount(() => {
         </div>
         <article v-for="record in records" :key="record.id" class="record-card">
           <div>
-            <strong>{{ record.identity_value }}</strong
+            <strong>签到 #{{ record.id }}</strong
             ><span class="status-pill" :class="record.status">{{
               checkinLabels[record.status]
             }}</span>
@@ -273,6 +282,9 @@ onBeforeUnmount(() => {
           <p>
             {{ formatTime(record.checked_in_at, event?.timezone) }} ·
             {{ record.source === 'manual' ? '人工补签' : '在线签到' }}
+          </p>
+          <p v-for="field in event?.fields.slice(0, 3) ?? []" :key="field.key">
+            {{ field.label }}：{{ formatAnswer(field, record.answers[field.key]) }}
           </p>
           <p v-if="record.risk_flags.length" class="risk-text">
             {{ record.risk_flags.join('、') }}
@@ -311,10 +323,8 @@ onBeforeUnmount(() => {
       cancel-text="取消"
       :confirm-loading="busy"
       @ok="manual"
-      ><p class="modal-intro">同样按身份去重。人工记录会标明来源，不视为通过定位校验。</p>
+      ><p class="modal-intro">遵循字段的重复规则。人工记录会标明来源，不视为通过定位校验。</p>
       <a-form layout="vertical"
-        ><a-form-item :label="event?.identity_label" required
-          ><a-input v-model:value="identity" placeholder="输入本次签到的身份标识" /></a-form-item
         ><AdminFields v-model="answers" :fields="event?.fields ?? []" /><a-form-item
           label="记录状态"
           ><a-select
@@ -335,9 +345,7 @@ onBeforeUnmount(() => {
       cancel-text="取消"
       :confirm-loading="busy"
       @ok="review"
-      ><p class="modal-intro">
-        身份：{{ selected?.identity_value }}。处理会保留原记录并写入操作审计。
-      </p>
+      ><p class="modal-intro">签到编号：{{ selected?.id }}。处理会保留原记录并写入操作审计。</p>
       <a-form layout="vertical"
         ><a-form-item label="处理结果"
           ><a-select
@@ -350,8 +358,8 @@ onBeforeUnmount(() => {
           ><a-input-textarea v-model:value="reason" :rows="3" /></a-form-item></a-form></a-modal
     ><a-modal :open="Boolean(detail)" title="签到详情" :footer="null" @cancel="detail = undefined"
       ><dl v-if="detail" class="detail-list">
-        <dt>身份标识</dt>
-        <dd>{{ detail.identity_value }}</dd>
+        <dt>签到编号</dt>
+        <dd>{{ detail.id }}</dd>
         <dt>当前状态</dt>
         <dd>{{ checkinLabels[detail.status] }}</dd>
         <dt>签到时间</dt>

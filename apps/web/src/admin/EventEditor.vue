@@ -275,7 +275,15 @@ onMounted(load);
           <section class="panel">
             <div class="section-number">02 / 签到方式</div>
             <h2 class="panel-title">签到准入</h2>
-            <p class="panel-subtitle">每个活动固定一个身份标识，发布后不能更改。</p>
+            <p class="panel-subtitle">
+              {{
+                event?.state === 'CLOSED'
+                  ? '活动已结束，签到配置不可修改。'
+                  : locked
+                    ? '活动已发布，身份类型和大小写规则已锁定；字段名称仍可修改。'
+                    : '发布后锁定身份类型和大小写规则；字段名称可继续修改。'
+              }}
+            </p>
             <div class="admission-options">
               <button
                 type="button"
@@ -307,7 +315,7 @@ onMounted(load);
                     { value: 'phone', label: '中国大陆手机号' },
                   ]" /></a-form-item
               ><a-form-item label="身份字段名称"
-                ><a-input v-model:value="form.identity_label" :disabled="Boolean(locked)"
+                ><a-input v-model:value="form.identity_label" :maxlength="60"
               /></a-form-item>
             </div>
             <label class="switch-line"

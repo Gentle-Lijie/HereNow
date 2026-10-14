@@ -27,6 +27,8 @@ const env = z
     TOKEN_SECRET: z.string().min(64),
     IDENTITY_SECRET: z.string().min(64),
     ENCRYPTION_KEY: z.string().regex(/^[a-f0-9]{64}$/),
+    VITE_AMAP_KEY: z.string().trim().max(128).default(''),
+    AMAP_SECURITY_JS_CODE: z.string().trim().max(128).default(''),
     ADMIN_USERNAME: z.string().default('admin'),
     ADMIN_PASSWORD: z.string(),
   })

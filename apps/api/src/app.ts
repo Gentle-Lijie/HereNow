@@ -16,6 +16,7 @@ import {
   type Participant,
 } from '../../../packages/contracts/src/index.js';
 import { db, rows, execute, transaction } from './db.js';
+import { mapProxyReady, proxyMap } from './services/map-proxy.js';
 import { config, projectRoot } from './config.js';
 import {
   AppError,
@@ -241,6 +242,23 @@ export async function buildApp() {
     });
     return { code: 'OK', event: await getEvent(id) };
   });
+  app.get('/api/admin/map-config', async (r) => {
+    admin(r);
+    return { code: 'OK', ready: mapProxyReady(), request_id: r.id };
+  });
+  app.get(
+    '/api/_AMapService/*',
+    { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } },
+    async (r, reply) => {
+      admin(r);
+      const url = new URL(r.url, config.APP_ORIGIN);
+      const result = await proxyMap(
+        url.pathname.slice('/api/_AMapService'.length),
+        url.searchParams,
+      );
+      return reply.type(result.contentType).send(result.body);
+    },
+  );
   app.patch('/api/admin/events/:id', async (r) => {
     const user = admin(r),
       id = getId(r),
@@ -249,7 +267,7 @@ export async function buildApp() {
       const old = await getEvent(id, c, 'exclusive');
       if (old.state === 'CLOSED') fail('ACTIVITY_UNAVAILABLE', '已结束活动不能编辑');
       if (old.state !== 'DRAFT') {
-        for (const key of ['identity_type', 'ignore_case', 'identity_label'] as const)
+        for (const key of ['identity_type', 'ignore_case'] as const)
           if (old[key] !== input[key]) fail('INVALID_FORM', '发布后不能修改身份规则');
         for (const f of old.fields) {
           const updated = input.fields.find((x) => x.key === f.key);

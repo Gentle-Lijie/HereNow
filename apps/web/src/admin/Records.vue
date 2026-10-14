@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import {
   Button as AButton,
   Input as AInput,
@@ -29,9 +29,9 @@ import {
 } from '../../../../packages/contracts/src/index';
 import { api, errorMessage, formatTime, session } from '../services/api';
 import { formatAnswer } from '../services/fields';
+import { openDisplayPip } from '../services/display-pip';
 import AdminFields from './AdminFields.vue';
 const id = String(useRoute().params.id),
-  router = useRouter(),
   event = ref<EventRecord>(),
   records = ref<CheckinRecord[]>([]),
   total = ref(0),
@@ -92,10 +92,7 @@ watch([search, status], () => {
 });
 async function display() {
   try {
-    const r = await api<{ display_url: string }>(`/admin/events/${id}/display-sessions`, {
-      method: 'POST',
-    });
-    await router.push(r.display_url);
+    await openDisplayPip(id);
   } catch (e) {
     error.value = errorMessage(e);
   }

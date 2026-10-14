@@ -36,7 +36,12 @@ export async function loadContext(force = false) {
 }
 export async function api<T>(
   path: string,
-  options: { method?: string; body?: unknown; headers?: Record<string, string> } = {},
+  options: {
+    method?: string;
+    body?: unknown;
+    headers?: Record<string, string>;
+    signal?: AbortSignal;
+  } = {},
 ): Promise<T> {
   await loadContext();
   const headers: Record<string, string> = { 'x-csrf-token': session.csrf, ...options.headers };
@@ -48,6 +53,9 @@ export async function api<T>(
   }
   let r: Response;
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (options.signal?.aborted) abort();
+  else options.signal?.addEventListener('abort', abort, { once: true });
   const timeout = setTimeout(() => controller.abort(), 15000);
   try {
     r = await fetch(`/api${path}`, {
@@ -61,6 +69,7 @@ export async function api<T>(
     throw new ApiError('NETWORK_ERROR', '网络连接中断，请检查网络后重试', 0);
   } finally {
     clearTimeout(timeout);
+    options.signal?.removeEventListener('abort', abort);
   }
   let data: T & { code?: string; message?: string };
   try {

@@ -19,6 +19,7 @@ import {
   type EventRecord,
 } from '../../../../packages/contracts/src/index';
 import { api, errorMessage, formatTime, session } from '../services/api';
+import { openDisplayPip } from '../services/display-pip';
 const events = ref<EventRecord[]>([]),
   loading = ref(true),
   error = ref(''),
@@ -66,10 +67,7 @@ async function refresh() {
 async function display(e: EventRecord) {
   opening.value = e.id;
   try {
-    const result = await api<{ display_url: string }>(`/admin/events/${e.id}/display-sessions`, {
-      method: 'POST',
-    });
-    await router.push(result.display_url);
+    await openDisplayPip(e.id);
   } catch (err) {
     error.value = errorMessage(err);
   } finally {

@@ -123,7 +123,9 @@ describe('Makers API transport', () => {
         controller.close();
       },
     });
-    vi.spyOn(request, 'body', 'get').mockReturnValue(stream as ReadableStream<Uint8Array>);
+    vi.spyOn(request, 'body', 'get').mockReturnValue(
+      stream as ReadableStream<Uint8Array<ArrayBuffer>>,
+    );
     vi.stubGlobal(
       'fetch',
       vi.fn(async (_url: URL, options: RequestInit) => {

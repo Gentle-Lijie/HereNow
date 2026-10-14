@@ -158,6 +158,22 @@ describe('location rules', () => {
       locationSchema.safeParse({ ...location, source: 'ip', coordinate_system: 'GCJ-02' }).success,
     ).toBe(false);
   });
+  it('reports distance to the allowed boundary without changing accuracy decisions', () => {
+    const equator = {
+      ...required,
+      center: { ...required.center, latitude: 0, longitude: 0 },
+      radius: 200,
+    };
+    expect(() => locationDecision(equator, { ...location, latitude: 0, longitude: 0.003 })).toThrow(
+      '当前位置在签到范围外，距离允许签到范围约 134 米',
+    );
+    expect(() =>
+      locationDecision(equator, { ...location, latitude: 0, longitude: 0.003, accuracy: 150 }),
+    ).toThrow('定位精度不足');
+    expect(() =>
+      locationDecision(equator, { ...location, latitude: 0, longitude: 0.0018 }),
+    ).toThrow('范围边界');
+  });
   it('uses same-frame distance and explicitly converts map centers once', () => {
     expect(haversine(location, location)).toBe(0);
     const point = normalizeCenter({

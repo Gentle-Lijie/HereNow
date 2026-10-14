@@ -359,6 +359,24 @@ describe('real MySQL check-in transactions', () => {
       selector = await c.scan(e, token);
     const denied = await c.call('POST', '/api/public/checkins', submission(), headers(selector));
     expect(denied.json().code).toBe('LOCATION_DENIED');
+    const outside = await c.call(
+      'POST',
+      '/api/public/checkins',
+      {
+        ...submission(),
+        location: {
+          latitude: 31.24,
+          longitude: 121.4737,
+          accuracy: 15,
+          coordinate_system: 'WGS84',
+          source: 'browser_geolocation',
+          captured_at: new Date().toISOString(),
+        },
+      },
+      headers(selector),
+    );
+    expect(outside.json().code).toBe('LOCATION_OUTSIDE');
+    expect(outside.json().message).toContain('距离允许签到范围约 868 米');
     const [s] = await rows<{ consumed: number }>(
       db,
       'SELECT consumed FROM checkin_sessions WHERE selector=?',

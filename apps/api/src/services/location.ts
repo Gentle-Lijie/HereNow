@@ -64,6 +64,10 @@ export function locationDecision(e: EventInput, location?: LocationInput) {
     fail('LOCATION_UNCERTAIN', '定位精度不足，请重试或现场核验');
   const a = location.accuracy + e.conversion_error_budget;
   if (distance + a <= e.radius) return { result: '范围内', distance };
-  if (distance - a > e.radius) fail('LOCATION_OUTSIDE', '当前位置在签到范围外');
+  if (distance - a > e.radius)
+    fail(
+      'LOCATION_OUTSIDE',
+      `当前位置在签到范围外，距离允许签到范围约 ${Math.ceil(distance - e.radius)} 米，请靠近后重新定位`,
+    );
   return fail('LOCATION_UNCERTAIN', '您位于签到范围边界，请重试或现场核验');
 }

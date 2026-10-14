@@ -7,6 +7,7 @@ import { db, execute, rows } from '../apps/api/src/db.js';
 import { createTestAdmin } from './fixtures/admin.js';
 import {
   eventInputSchema,
+  eventConfigSchema,
   type EventRecord,
   type Answers,
 } from '../packages/contracts/src/index.js';
@@ -47,6 +48,7 @@ class Client {
 const code = {
   key: 'entry_code',
   label: '报名号',
+  label_en: 'Registration code',
   type: 'text' as const,
   required: true,
   allow_duplicates: false,
@@ -54,17 +56,22 @@ const code = {
 const phone = {
   key: 'phone',
   label: '手机号',
+  label_en: 'Phone number',
   type: 'phone' as const,
   required: true,
   allow_duplicates: false,
 };
 async function create(overrides: Record<string, unknown> = {}) {
-  const input = eventInputSchema.parse({
+  const candidate = eventConfigSchema.parse({
     name: '字段重复规则回归',
     organizer: '仅测试',
     starts_at: new Date(Date.now() - 60000).toISOString(),
     ends_at: new Date(Date.now() + 3600000).toISOString(),
     ...overrides,
+  });
+  const input = eventInputSchema.parse({
+    ...candidate,
+    fields: candidate.fields.map((field) => ({ ...field, label_en: field.label_en || field.key })),
   });
   const response = await admin.call('POST', '/admin/events', input);
   expect(response.statusCode).toBe(200);
@@ -151,6 +158,7 @@ describe('custom field repetition rules in real MySQL', () => {
     const badge = {
       key: 'badge',
       label: '证件号',
+      label_en: 'Badge number',
       type: 'text',
       required: false,
       allow_duplicates: false,
@@ -332,7 +340,7 @@ describe('custom field repetition rules in real MySQL', () => {
       organizer: '仅测试',
       starts_at: new Date(Date.now() - 60000).toISOString(),
       ends_at: new Date(Date.now() + 3600000).toISOString(),
-      fields: [{ key: 'name', label: '姓名', type: 'text' }],
+      fields: [{ key: 'name', label: '姓名', label_en: 'Name', type: 'text' }],
     });
     const cfg = {
       ...input,

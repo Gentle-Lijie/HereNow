@@ -18,6 +18,7 @@ export const fieldSchema = z
   .object({
     key: safeKey,
     label: z.string().trim().min(1).max(80),
+    label_en: z.string().trim().max(80).default(''),
     type: z.enum(fieldTypes),
     required: z.boolean().default(false),
     options: z
@@ -54,7 +55,7 @@ export const fieldSchema = z
     )
       c.addIssue({ code: 'custom', message: '选择字段需要不重复的选项键' });
   });
-export const eventInputSchema = z
+export const eventConfigSchema = z
   .object({
     name: z.string().trim().min(1, '请输入活动名称').max(120),
     description: z.string().max(2000).default(''),
@@ -114,6 +115,16 @@ export const eventInputSchema = z
     if (e.admission === 'open' && e.fields.some((f) => f.source === 'roster'))
       c.addIssue({ code: 'custom', message: '名单权威字段仅用于名单模式' });
   });
+export const eventInputSchema = eventConfigSchema.superRefine((event, context) => {
+  event.fields.forEach((field, index) => {
+    if (!field.label_en.trim())
+      context.addIssue({
+        code: 'custom',
+        path: ['fields', index, 'label_en'],
+        message: '所有字段名称必须填写中文和英文',
+      });
+  });
+});
 export type Field = z.infer<typeof fieldSchema>;
 export type EventInput = z.infer<typeof eventInputSchema>;
 export function checkinOpensAt(event: Pick<EventInput, 'starts_at' | 'checkin_early_minutes'>) {
@@ -229,7 +240,7 @@ export function upgradeLegacyEventConfig(config: unknown): EventInput {
   if (!config || typeof config !== 'object' || Array.isArray(config))
     throw new Error('活动配置无效');
   const data = config as Record<string, unknown>;
-  if (typeof data.identity_type !== 'string') return eventInputSchema.parse(config);
+  if (typeof data.identity_type !== 'string') return eventConfigSchema.parse(config);
   const { identity_type, identity_label, ignore_case, ...rest } = data;
   const fields = z.array(fieldSchema).parse(data.fields ?? []);
   let key = 'entry_code';
@@ -244,7 +255,7 @@ export function upgradeLegacyEventConfig(config: unknown): EventInput {
     roster_match: true,
     max_length: 120,
   });
-  return eventInputSchema.parse({ ...rest, fields: [field, ...fields] });
+  return eventConfigSchema.parse({ ...rest, fields: [field, ...fields] });
 }
 export function validateAnswers(
   fields: Field[],

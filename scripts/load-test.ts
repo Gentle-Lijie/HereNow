@@ -49,7 +49,14 @@ try {
   const input = eventInputSchema.parse({
     name: '压测临时活动',
     fields: [
-      { key: 'entry_code', label: '编号', type: 'text', required: true, allow_duplicates: false },
+      {
+        key: 'entry_code',
+        label: '编号',
+        label_en: 'Entry code',
+        type: 'text',
+        required: true,
+        allow_duplicates: false,
+      },
     ],
     organizer: '仅自动化测试',
     starts_at: new Date(Date.now() - 60000).toISOString(),

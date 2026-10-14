@@ -414,6 +414,8 @@ export async function buildApp() {
     await transaction(async (c) => {
       const e = await getEvent(id, c, 'exclusive');
       if (e.state !== 'DRAFT') fail('INVALID_STATE', '只有草稿可以发布');
+      if (e.fields.some((field) => !field.label_en.trim()))
+        fail('INVALID_FORM', '所有字段名称必须填写中文和英文');
       if (e.location_mode === 'required' && !e.center) fail('INVALID_FORM', '请先设置活动中心');
       normalizeCenter(e);
       if (e.admission === 'roster') {

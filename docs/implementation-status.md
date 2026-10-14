@@ -82,3 +82,7 @@
 ## 签到成功凭证
 
 2026-10-14：成功页增加截图保存提示，时间采用活动时区 YYYY/MM/DD HH:mm，按原表单顺序展示已保存的公开用户填写信息；保留选项文字、布尔值、前导零与长文本，隐藏后台／名单字段。纯展示与格式化检查通过，详情见 `docs/receipt-saving-validation.md`；没有修改 API 或数据库，浏览器截图／真机效果未实测。
+
+## Document PiP 与中英文参与端
+
+2026-10-14：按顺序独立提交 PiP 与 i18n。展示按钮使用 Document PiP，普通 display 路由和浮窗共用精简内容；display 与 s 提供内嵌中英文，配置字段中英文名强制必填，旧活动兼容运行并在编辑时补齐。迁移 006 与真实 MySQL 8.4.5 的 92 项测试通过。原生窗口和界面视觉未使用 browser use 实测，见 docs/document-pip-validation.md 与 docs/pip-i18n-validation.md。

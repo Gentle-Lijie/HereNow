@@ -51,7 +51,7 @@
 
 ## 服务与运维
 
-当前发布目录 `/srv/herenow/releases/20261014-ui-fixes`（前一版本 20261014-features、20261014-initial 均保留），稳定入口 `/srv/herenow/current`。`output` 和 `.local` 指向 `/srv/herenow/shared`，升级时保留备份与删除账本。后端以独立 `herenow` 用户运行，代码只读，配置 root 管理，只有共享运维目录可写。
+当前发布目录 `/srv/herenow/releases/20261014-i18n`（前一版本 20261014-features、20261014-initial 均保留），稳定入口 `/srv/herenow/current`。`output` 和 `.local` 指向 `/srv/herenow/shared`，升级时保留备份与删除账本。后端以独立 `herenow` 用户运行，代码只读，配置 root 管理，只有共享运维目录可写。
 
 ```sh
 ssh b 'systemctl status herenow-api --no-pager'

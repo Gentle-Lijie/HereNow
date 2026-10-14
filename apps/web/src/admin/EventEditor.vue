@@ -24,6 +24,7 @@ import {
 } from '@ant-design/icons-vue';
 import {
   eventInputSchema,
+  eventConfigSchema,
   fieldSchema,
   stateLabels,
   fieldTypes,
@@ -111,7 +112,7 @@ async function load() {
   loading.value = true;
   try {
     event.value = (await api<{ event: EventRecord }>(`/admin/events/${id.value}`)).event;
-    const data = eventInputSchema.parse(
+    const data = eventConfigSchema.parse(
       Object.fromEntries(Object.entries(event.value).filter(([k]) => k in form)),
     );
     Object.assign(form, data);
@@ -275,6 +276,13 @@ onMounted(load);
       </div>
     </div>
     <div v-if="error" class="error-banner" role="alert">{{ error }}</div>
+    <div
+      v-if="id && form.fields.some((field) => !field.label_en.trim())"
+      class="translation-note"
+      role="status"
+    >
+      现有字段缺少英文名称，保存或发布前请补齐各字段的中英文名称。
+    </div>
     <div v-if="id" class="tab-links">
       <RouterLink :to="`/admin/events/${id}`">活动配置</RouterLink
       ><RouterLink :to="`/admin/events/${id}/roster`">参与名单</RouterLink
@@ -463,7 +471,14 @@ onMounted(load);
                 </div>
               </div>
               <div class="form-grid">
-                <a-form-item label="字段名称"><a-input v-model:value="field.label" /></a-form-item
+                <a-form-item label="字段名称（中文）" required
+                  ><a-input v-model:value="field.label" :maxlength="80"
+                /></a-form-item>
+                <a-form-item label="Field name（英文）" required
+                  ><a-input
+                    v-model:value="field.label_en"
+                    :maxlength="80"
+                    placeholder="例如：Full name" /></a-form-item
                 ><a-form-item label="字段类型"
                   ><a-select
                     :value="field.type"
@@ -613,6 +628,14 @@ onMounted(load);
   </div>
 </template>
 <style scoped>
+.translation-note {
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
 .logo-picker {
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);

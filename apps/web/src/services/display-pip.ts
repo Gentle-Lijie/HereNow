@@ -39,7 +39,14 @@ const controller = createPipController({
       target.document.body.style.margin = '0';
       const root = target.document.createElement('div');
       target.document.body.append(root);
-      const app = createApp(DisplayCode, { eventId, timerHost: target, origin: location.origin });
+      const app = createApp(DisplayCode, {
+        eventId,
+        timerHost: target,
+        origin: location.origin,
+        onTitle: (value: string) => {
+          target.document.title = value;
+        },
+      });
       app.mount(root);
       return () => {
         app.unmount();

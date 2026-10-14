@@ -17,14 +17,21 @@ try {
         {
           key: 'entry_code',
           label: '报名编号',
+          label_en: 'Registration code',
           type: 'text',
           required: true,
           allow_duplicates: false,
           roster_match: true,
           max_length: 120,
         },
-        { key: 'name', label: '姓名', type: 'text', required: true },
-        { key: 'department', label: '团队 / 部门', type: 'text', required: false },
+        { key: 'name', label: '姓名', label_en: 'Name', type: 'text', required: true },
+        {
+          key: 'department',
+          label: '团队 / 部门',
+          label_en: 'Team / Department',
+          type: 'text',
+          required: false,
+        },
       ],
     });
     const result = await execute(

@@ -12,13 +12,14 @@ const e = eventInputSchema.parse({
     {
       key: 'entry_code',
       label: '员工编号',
+      label_en: 'Employee code',
       type: 'text',
       required: true,
       roster_match: true,
       allow_duplicates: false,
       max_length: 120,
     },
-    { key: 'name', label: '姓名', type: 'text', required: true },
+    { key: 'name', label: '姓名', label_en: 'Name', type: 'text', required: true },
   ],
 });
 describe('safe spreadsheet boundaries', () => {

@@ -16,6 +16,7 @@ import { randomToken, digest } from '../apps/api/src/services/security.js';
 import { rosterDigest } from '../apps/api/src/services/field-values.js';
 import { createTestAdmin } from './fixtures/admin.js';
 import { resetAdminPassword } from '../apps/api/src/services/accounts.js';
+import { up as migrateBilingualFields } from '../database/migrations/006_bilingual_field_labels.js';
 let testAdmin: Awaited<ReturnType<typeof createTestAdmin>> | undefined;
 const operators: string[] = [];
 let app: FastifyInstance;
@@ -72,13 +73,17 @@ async function create(overrides: Record<string, unknown> = {}) {
       {
         key: 'entry_code',
         label: '编号',
+        label_en: 'Entry code',
         type: 'text',
         required: true,
         allow_duplicates: false,
         roster_match: true,
         max_length: 120,
       },
-      ...fields.map((f) => fieldSchema.parse(f)),
+      ...fields.map((f) => {
+        const field = fieldSchema.parse(f);
+        return { ...field, label_en: field.label_en || field.key };
+      }),
     ],
   });
   const r = await admin.call('POST', '/api/admin/events', input);
@@ -652,6 +657,64 @@ describe('real MySQL check-in transactions', () => {
       e.checkin_logo,
     );
     expect((await admin.call('GET', `/api/display/events/${e.id}/qr`)).statusCode).toBe(401);
+  });
+  it('requires English labels on edits and publication while keeping legacy active sessions valid', async () => {
+    const e = await create(),
+      token = await publish(e),
+      client = await new Client().context(),
+      selector = await client.scan(e, token);
+    await execute(
+      db,
+      "UPDATE events SET config=JSON_REMOVE(config,'$.fields[0].label_en') WHERE id=?",
+      [e.id],
+    );
+    const stored = (await admin.call('GET', `/api/admin/events/${e.id}`)).json()
+      .event as EventRecord;
+    expect(stored.fields[0]!.label_en).toBe('');
+    const connection = await db.getConnection();
+    try {
+      await migrateBilingualFields(connection);
+    } finally {
+      connection.release();
+    }
+    const [migrated] = await rows<{ present: number }>(
+      db,
+      "SELECT JSON_CONTAINS_PATH(config,'one','$.fields[0].label_en') AS present FROM events WHERE id=?",
+      [e.id],
+    );
+    expect(Number(migrated?.present)).toBe(1);
+    const input = Object.fromEntries(
+      Object.entries(stored).filter(([key]) => key in eventInputSchema.shape),
+    );
+    expect((await admin.call('PATCH', `/api/admin/events/${e.id}`, input)).json().code).toBe(
+      'INVALID_FORM',
+    );
+    expect(
+      (
+        await client.call(
+          'POST',
+          '/api/public/checkins',
+          submission('legacy-bilingual'),
+          headers(selector),
+        )
+      ).statusCode,
+    ).toBe(200);
+    stored.fields[0]!.label_en = 'Entry code';
+    const updated = await admin.call('PATCH', `/api/admin/events/${e.id}`, {
+      ...input,
+      fields: stored.fields,
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json().event.policy_epoch).toBe(stored.policy_epoch);
+    const draft = await create();
+    await execute(
+      db,
+      "UPDATE events SET config=JSON_REMOVE(config,'$.fields[0].label_en') WHERE id=?",
+      [draft.id],
+    );
+    expect((await admin.call('POST', `/api/admin/events/${draft.id}/publish`)).json().code).toBe(
+      'INVALID_FORM',
+    );
   });
   it('supports online and manual early check-in and invalidates old sessions on offset edits', async () => {
     const e = await create({

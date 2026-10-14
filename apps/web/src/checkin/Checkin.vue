@@ -18,9 +18,11 @@ import {
   type PublicSession,
   type CheckinInput,
 } from '../../../../packages/contracts/src/index';
-import { api, ApiError, errorMessage, formatTime } from '../services/api';
+import { api, ApiError, formatTime } from '../services/api';
 import { formatReceiptTime } from '../services/time';
 import { receiptAnswers } from '../services/receipts';
+import { locale, t, fieldLabel, publicErrorMessage } from '../services/locale';
+import LanguageSwitch from '../components/LanguageSwitch.vue';
 import EventBrand from '../components/EventBrand.vue';
 import MobileFields from './MobileFields.vue';
 const publicId = String(useRoute().params.publicId),
@@ -37,7 +39,9 @@ const publicId = String(useRoute().params.publicId),
   consent = ref(false),
   result = ref<CheckinRecord>(),
   locationData = ref<LocationInput>(),
-  locationState = ref('未获取位置'),
+  locationStatus = ref<
+    'idle' | 'loading' | 'ready' | 'unsupported' | 'denied' | 'timeout' | 'failed'
+  >('idle'),
   locating = ref(false),
   now = ref(Date.now()),
   offset = ref(0),
@@ -57,7 +61,7 @@ let alive = true;
 let submitted: { key: string; body: CheckinInput } | undefined;
 const savedAnswerRows = computed(() =>
   result.value && publicSession.value
-    ? receiptAnswers(publicSession.value.event.fields, result.value.answers)
+    ? receiptAnswers(publicSession.value.event.fields, result.value.answers, locale.value)
     : [],
 );
 const draft = () => {
@@ -103,7 +107,13 @@ async function initialize() {
       history.replaceState(null, '', location.pathname);
     } else {
       const savedSession = sessionStorage.getItem(sessionKey);
-      if (!savedSession) throw new Error('请扫描现场正在展示的活动二维码，开始签到。');
+      if (!savedSession)
+        throw new Error(
+          t(
+            '请扫描现场正在展示的活动二维码，开始签到。',
+            'Please scan the current on-site event QR code to begin.',
+          ),
+        );
       publicSession.value = JSON.parse(savedSession) as PublicSession;
       const pendingAttempt = sessionStorage.getItem(attemptKey);
       if (pendingAttempt) {
@@ -142,18 +152,51 @@ async function initialize() {
       if (remaining.value === 0 && !result.value) expired.value = true;
     }, 1000);
   } catch (e) {
-    error.value = errorMessage(e);
+    error.value = publicErrorMessage(e);
   } finally {
     loading.value = false;
   }
 }
+const locationState = computed(() => {
+  switch (locationStatus.value) {
+    case 'loading':
+      return t('正在获取位置…', 'Getting your location…');
+    case 'ready':
+      return t(
+        `已获取位置 · 误差约 ${Math.ceil(locationData.value?.accuracy ?? 0)} 米`,
+        `Location received · accuracy about ${Math.ceil(locationData.value?.accuracy ?? 0)} m`,
+      );
+    case 'unsupported':
+      return t(
+        '此浏览器不支持定位，请联系现场工作人员',
+        'This browser does not support location. Please contact staff.',
+      );
+    case 'denied':
+      return t(
+        '位置权限已关闭，请在浏览器设置中允许定位',
+        'Location access is denied. Please enable it in browser settings.',
+      );
+    case 'timeout':
+      return t('定位超时，请重试', 'Location request timed out. Please try again.');
+    case 'failed':
+      return t(
+        '暂时无法获取位置，请重试或现场核验',
+        'Unable to get your location. Please retry or contact staff.',
+      );
+    default:
+      return t('未获取位置', 'Location not received');
+  }
+});
+watch(locale, () => {
+  error.value = '';
+});
 function locate() {
   if (!navigator.geolocation) {
-    locationState.value = '此浏览器不支持定位，请联系现场工作人员';
+    locationStatus.value = 'unsupported';
     return;
   }
   locating.value = true;
-  locationState.value = '正在获取位置…';
+  locationStatus.value = 'loading';
   navigator.geolocation.getCurrentPosition(
     (p) => {
       if (!alive) return;
@@ -165,17 +208,12 @@ function locate() {
         source: 'browser_geolocation',
         captured_at: new Date(p.timestamp).toISOString(),
       };
-      locationState.value = `已获取位置 · 误差约 ${Math.ceil(p.coords.accuracy)} 米`;
+      locationStatus.value = 'ready';
       locating.value = false;
     },
     (e) => {
       if (!alive) return;
-      locationState.value =
-        e.code === 1
-          ? '位置权限已关闭，请在浏览器设置中允许定位'
-          : e.code === 3
-            ? '定位超时，请重试'
-            : '暂时无法获取位置，请重试或现场核验';
+      locationStatus.value = e.code === 1 ? 'denied' : e.code === 3 ? 'timeout' : 'failed';
       locationData.value = undefined;
       locating.value = false;
     },
@@ -186,18 +224,28 @@ async function submit() {
   if (!publicSession.value || submitting.value) return;
   error.value = '';
   if (!consent.value) {
-    error.value = '请阅读并同意本次活动的信息收集说明';
+    error.value = t(
+      '请阅读并同意本次活动的信息收集说明',
+      'Please read and agree to the event data collection notice.',
+    );
     return;
   }
   const event = publicSession.value.event;
   try {
-    if (!networkUncertain.value) validateAnswers(event.fields, answers.value);
+    if (!networkUncertain.value)
+      validateAnswers(
+        event.fields.map((field) => ({ ...field, label: fieldLabel(field) })),
+        answers.value,
+      );
   } catch (e) {
-    error.value = errorMessage(e);
+    error.value = publicErrorMessage(e);
     return;
   }
   if (!networkUncertain.value && event.location_mode === 'required' && !locationData.value) {
-    error.value = '请先获取位置；如果无法定位，请联系现场工作人员。';
+    error.value = t(
+      '请先获取位置；如果无法定位，请联系现场工作人员。',
+      'Please get your location first, or contact staff for assistance.',
+    );
     return;
   }
   const body: CheckinInput = {
@@ -234,7 +282,7 @@ async function submit() {
   } catch (e) {
     networkUncertain.value = e instanceof ApiError && (e.status === 0 || e.status >= 500);
     if (!networkUncertain.value) sessionStorage.removeItem(attemptKey);
-    error.value = errorMessage(e);
+    error.value = publicErrorMessage(e);
     if (e instanceof ApiError && ['SESSION_EXPIRED', 'RULE_CHANGED'].includes(e.code))
       expired.value = true;
   } finally {
@@ -242,7 +290,7 @@ async function submit() {
   }
 }
 function formFailed() {
-  error.value = '请检查标记的必填字段';
+  error.value = t('请检查标记的必填字段', 'Please check the highlighted required fields.');
   document
     .querySelector('.van-field__error-message')
     ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -254,13 +302,18 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-  <div class="checkin-page">
+  <div class="checkin-page" :lang="locale === 'en' ? 'en' : 'zh-CN'">
     <header class="checkin-header">
-      <EventBrand :logo="publicSession?.event.checkin_logo" :name="publicSession?.event.name" />
+      <EventBrand
+        :logo="publicSession?.event.checkin_logo"
+        :name="publicSession?.event.name"
+      /><LanguageSwitch />
     </header>
     <main class="checkin-main">
       <div v-if="loading" class="checkin-loading">
-        <van-loading size="25px" color="#d6603d">正在准备本次签到…</van-loading>
+        <van-loading size="25px" color="#d6603d">{{
+          t('正在准备本次签到…', 'Preparing your check-in…')
+        }}</van-loading>
       </div>
       <section v-else-if="result" class="result-card">
         <div class="result-symbol" :class="result.status">
@@ -268,33 +321,56 @@ onBeforeUnmount(() => {
             <path d="m10 20 7 7 14-15" /></svg
           ><span v-else>{{ result.status === 'PENDING_REVIEW' ? '…' : '!' }}</span>
         </div>
-        <h1>{{ checkinLabels[result.status] }}</h1>
+        <h1>
+          {{
+            locale === 'zh'
+              ? checkinLabels[result.status]
+              : result.status === 'CHECKED_IN'
+                ? 'Checked in'
+                : result.status === 'PENDING_REVIEW'
+                  ? 'Pending review'
+                  : 'Revoked'
+          }}
+        </h1>
         <p v-if="result.status === 'CHECKED_IN'" class="receipt-save-notice" role="status">
-          请截图保存本页，作为本次签到成功凭证。内容较长时可使用长截图。
+          {{
+            t(
+              '请截图保存本页，作为本次签到成功凭证。内容较长时可使用长截图。',
+              'Take a screenshot of this page to save your successful check-in receipt. Use a scrolling screenshot for longer content.',
+            )
+          }}
         </p>
         <p v-if="result.status !== 'CHECKED_IN'">
           {{
             result.status === 'PENDING_REVIEW'
-              ? '请联系现场工作人员完成核验。'
-              : '记录已撤销，请联系现场工作人员。'
+              ? t(
+                  '请联系现场工作人员完成核验。',
+                  'Please contact on-site staff to complete the review.',
+                )
+              : t(
+                  '记录已撤销，请联系现场工作人员。',
+                  'This check-in has been revoked. Please contact staff.',
+                )
           }}
         </p>
         <div class="receipt-details">
           <div>
-            <span>活动</span><strong>{{ publicSession?.event.name }}</strong>
+            <span>{{ t('活动', 'Event') }}</span
+            ><strong>{{ publicSession?.event.name }}</strong>
           </div>
           <div>
-            <span>签到时间</span
+            <span>{{ t('签到时间', 'Check-in time') }}</span
             ><strong>{{
               formatReceiptTime(result.checked_in_at, publicSession?.event.timezone)
             }}</strong>
           </div>
           <div>
-            <span>回执</span><strong class="receipt-id">{{ result.receipt_id }}</strong>
+            <span>{{ t('回执', 'Receipt') }}</span
+            ><strong class="receipt-id">{{ result.receipt_id }}</strong>
           </div>
         </div>
         <section v-if="savedAnswerRows.length" class="receipt-answers">
-          <h2>填写信息</h2>
+          <h2>{{ t('填写信息', 'Submitted information') }}</h2>
           <dl>
             <div v-for="row in savedAnswerRows" :key="row.key">
               <dt>{{ row.label }}</dt>
@@ -304,7 +380,12 @@ onBeforeUnmount(() => {
         </section>
         <div class="result-footer">
           {{
-            result.status === 'CHECKED_IN' ? '信息已记录，无需再次提交。' : '此状态不计为签到成功。'
+            result.status === 'CHECKED_IN'
+              ? t(
+                  '信息已记录，无需再次提交。',
+                  'Your information has been saved. No need to submit again.',
+                )
+              : t('此状态不计为签到成功。', 'This status does not count as a successful check-in.')
           }}
         </div>
       </section>
@@ -324,7 +405,8 @@ onBeforeUnmount(() => {
                 {{ formatTime(publicSession.event.ends_at, publicSession.event.timezone) }}</span
               ></span
             ><span v-if="publicSession.event.checkin_early_minutes > 0">
-              提前 {{ publicSession.event.checkin_early_minutes }} 分钟开放签到 </span
+              {{ t('提前', 'Check-in opens') }} {{ publicSession.event.checkin_early_minutes }}
+              {{ t('分钟开放签到', 'minutes before the event') }} </span
             ><span v-if="publicSession.event.location_label"
               ><svg viewBox="0 0 20 20" aria-hidden="true">
                 <path d="M16 8c0 5-6 10-6 10S4 13 4 8a6 6 0 1 1 12 0Z" />
@@ -335,12 +417,19 @@ onBeforeUnmount(() => {
         </section>
         <div v-if="error" class="error-banner" role="alert">{{ error }}</div>
         <div v-if="expired" class="session-expired" role="alert">
-          <strong>这次扫码会话已结束</strong>
-          <p>请重新扫描现场最新二维码。已填内容会短时保留。</p>
+          <strong>{{ t('这次扫码会话已结束', 'This scan session has ended') }}</strong>
+          <p>
+            {{
+              t(
+                '请重新扫描现场最新二维码。已填内容会短时保留。',
+                'Please scan the latest on-site QR code. Your draft is kept temporarily.',
+              )
+            }}
+          </p>
         </div>
         <template v-if="publicSession"
           ><p v-if="!expired" class="session-countdown" role="timer">
-            请在 {{ remaining }} 秒内提交
+            {{ t('请在', 'Please submit within') }} {{ remaining }} {{ t('秒内提交', 'seconds') }}
           </p>
           <van-form :disabled="expired" scroll-to-error @submit="submit" @failed="formFailed"
             ><van-cell-group v-if="publicSession.event.fields.length" class="checkin-fields"
@@ -350,13 +439,21 @@ onBeforeUnmount(() => {
               <div class="location-heading">
                 <div>
                   <strong>{{
-                    publicSession.event.location_mode === 'required' ? '现场定位' : '记录本次位置'
+                    publicSession.event.location_mode === 'required'
+                      ? t('现场定位', 'On-site location')
+                      : t('记录本次位置', 'Record location')
                   }}</strong>
                   <p>
                     {{
                       publicSession.event.location_mode === 'required'
-                        ? '位置将用于判断签到范围。'
-                        : '获取失败仍可继续签到。'
+                        ? t(
+                            '位置将用于判断签到范围。',
+                            'Your location is used to check the permitted area.',
+                          )
+                        : t(
+                            '获取失败仍可继续签到。',
+                            'You can continue if location is unavailable.',
+                          )
                     }}
                   </p>
                 </div>
@@ -369,27 +466,41 @@ onBeforeUnmount(() => {
                   :loading="locating"
                   :disabled="expired"
                   @click="locate"
-                  >{{ locationData ? '重新获取' : '获取位置' }}</van-button
+                  >{{
+                    locationData ? t('重新获取', 'Locate again') : t('获取位置', 'Get location')
+                  }}</van-button
                 >
               </div>
             </section>
             <section class="privacy-card">
               <p>
                 {{ publicSession.event.organizer }}
-                收集本次表单信息，用于活动签到管理。签到资料在活动结束后保留
-                {{ publicSession.event.retention_days }} 天。{{
+                {{
+                  t(
+                    '收集本次表单信息，用于活动签到管理。签到资料在活动结束后保留',
+                    'collects this information to manage event check-ins. Records are kept after the event for',
+                  )
+                }}
+                {{ publicSession.event.retention_days }} {{ t('天。', 'days.')
+                }}{{
                   publicSession.event.location_mode === 'off'
-                    ? '本活动不采集位置。'
-                    : '位置信息及相关证据单独保留 7 天。'
+                    ? t('本活动不采集位置。', 'This event does not collect location.')
+                    : t(
+                        '位置信息及相关证据单独保留 7 天。',
+                        'Location and related evidence are retained separately for 7 days.',
+                      )
                 }}{{
                   publicSession.event.contact
-                    ? `如有疑问，请联系 ${publicSession.event.contact}。`
+                    ? t(
+                        `如有疑问，请联系 ${publicSession.event.contact}。`,
+                        `For questions, please contact ${publicSession.event.contact}.`,
+                      )
                     : ''
                 }}
               </p>
-              <van-checkbox v-model="consent" icon-size="17px" checked-color="#d6603d"
-                >我已了解并同意本次信息收集</van-checkbox
-              >
+              <van-checkbox v-model="consent" icon-size="17px" checked-color="#d6603d">{{
+                t('我已了解并同意本次信息收集', 'I understand and agree to this data collection')
+              }}</van-checkbox>
             </section>
             <div class="checkin-submit">
               <van-button
@@ -398,8 +509,12 @@ onBeforeUnmount(() => {
                 native-type="submit"
                 :loading="submitting"
                 :disabled="expired && !networkUncertain"
-                loading-text="正在提交…"
-                >{{ networkUncertain ? '确认上次提交结果' : '确认签到' }}</van-button
+                :loading-text="t('正在提交…', 'Submitting…')"
+                >{{
+                  networkUncertain
+                    ? t('确认上次提交结果', 'Check previous submission')
+                    : t('确认签到', 'Confirm check-in')
+                }}</van-button
               >
             </div></van-form
           ></template
@@ -425,6 +540,8 @@ onBeforeUnmount(() => {
 .checkin-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   max-width: 560px;
   margin: auto;
   padding: 16px;

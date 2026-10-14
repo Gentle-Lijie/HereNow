@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watchEffect } from 'vue';
 import QRCode from 'qrcode';
-import { api, errorMessage } from '../services/api';
+import { api } from '../services/api';
+import { locale, t, publicErrorMessage } from '../services/locale';
 import EventBrand from '../components/EventBrand.vue';
 const props = defineProps<{ eventId: string; timerHost: Window; origin: string }>();
+const emit = defineEmits<{ title: [string] }>();
 const requests = new AbortController();
-const name = ref('准备签到'),
+const name = ref(''),
   logo = ref<string | null>(null),
   qr = ref(''),
   expires = ref(0),
@@ -52,7 +54,7 @@ async function refresh() {
     error.value = '';
   } catch (cause) {
     if (alive) {
-      error.value = errorMessage(cause);
+      error.value = publicErrorMessage(cause);
       const status = (cause as { status?: number }).status;
       if (status && status >= 400 && status < 500) {
         expires.value = 0;
@@ -78,20 +80,33 @@ onBeforeUnmount(() => {
   if (ticker !== undefined) props.timerHost.clearInterval(ticker);
   if (refreshTimer !== undefined) props.timerHost.clearTimeout(refreshTimer);
 });
+watchEffect(() => {
+  emit('title', t('活动签到', 'Event check-in'));
+});
 </script>
 <template>
-  <main class="display-code">
+  <main class="display-code" :lang="locale === 'en' ? 'en' : 'zh-CN'">
     <EventBrand :logo="logo" :name="name" />
-    <h1>{{ name }}</h1>
-    <p class="display-code__label">签到</p>
+    <h1>{{ name || t('准备签到', 'Preparing check-in') }}</h1>
+    <p class="display-code__label">{{ t('签到', 'Check in') }}</p>
     <div class="display-code__qr">
-      <img v-if="canShow" :src="qr" alt="活动动态签到二维码" />
+      <img
+        v-if="canShow"
+        :src="qr"
+        :alt="t('活动动态签到二维码', 'Dynamic event check-in QR code')"
+      />
       <p v-else role="status">
-        {{ loading ? '正在生成签到码…' : error || '签到码已过期，正在刷新…' }}
+        {{
+          loading
+            ? t('正在生成签到码…', 'Generating QR code…')
+            : error || t('签到码已过期，正在刷新…', 'QR code expired. Refreshing…')
+        }}
       </p>
     </div>
-    <output class="display-code__countdown" aria-label="签到码有效倒计时">{{
-      canShow ? `${remaining} 秒` : '—'
-    }}</output>
+    <output
+      class="display-code__countdown"
+      :aria-label="t('签到码有效倒计时', 'QR code expiry countdown')"
+      >{{ canShow ? `${remaining} ${t('秒', 's')}` : '—' }}</output
+    >
   </main>
 </template>

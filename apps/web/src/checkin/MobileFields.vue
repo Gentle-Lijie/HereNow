@@ -10,6 +10,7 @@ import {
   Switch as VanSwitch,
 } from 'vant';
 import type { Field, Answer, Answers } from '../../../../packages/contracts/src/index';
+import { fieldLabel, t } from '../services/locale';
 const props = defineProps<{ fields: Field[]; modelValue: Answers }>();
 const emit = defineEmits<{ 'update:modelValue': [Answers] }>();
 const selected = ref<Field>(),
@@ -43,26 +44,31 @@ function confirm(e: { selectedValues: Array<string | number> }) {
         v-if="field.type === 'select' || field.type === 'multiselect'"
         :model-value="display(field)"
         :name="field.key"
-        :label="field.label"
+        :label="fieldLabel(field)"
         label-align="top"
         readonly
         is-link
         :required="field.required"
-        :placeholder="field.help_text || '请选择'"
-        :rules="[{ required: field.required, message: `请选择${field.label}` }]"
+        :placeholder="field.help_text || t('请选择', 'Please select')"
+        :rules="[
+          {
+            required: field.required,
+            message: t(`请选择${fieldLabel(field)}`, `Please select ${fieldLabel(field)}`),
+          },
+        ]"
         @click="open(field)" /><van-field
         v-else-if="field.type === 'boolean'"
         :name="field.key"
-        :label="field.label"
+        :label="fieldLabel(field)"
         label-align="top"
         :required="field.required"
         :rules="[
           {
             validator: () => !field.required || props.modelValue[field.key] === true,
-            message: `请确认${field.label}`,
+            message: t(`请确认${fieldLabel(field)}`, `Please confirm ${fieldLabel(field)}`),
           },
         ]"
-        :model-value="modelValue[field.key] ? '已确认' : ''"
+        :model-value="modelValue[field.key] ? t('已确认', 'Confirmed') : ''"
         ><template #input
           ><van-switch
             :model-value="Boolean(modelValue[field.key])"
@@ -72,16 +78,21 @@ function confirm(e: { selectedValues: Array<string | number> }) {
         v-else-if="field.type === 'date'"
         :model-value="String(modelValue[field.key] ?? '')"
         :name="field.key"
-        :label="field.label"
+        :label="fieldLabel(field)"
         label-align="top"
         :required="field.required"
-        :rules="[{ required: field.required, message: `请填写${field.label}` }]"
+        :rules="[
+          {
+            required: field.required,
+            message: t(`请填写${fieldLabel(field)}`, `Please enter ${fieldLabel(field)}`),
+          },
+        ]"
         ><template #input
           ><input
             class="mobile-date"
             type="date"
             :value="String(modelValue[field.key] ?? '')"
-            :aria-label="field.label"
+            :aria-label="fieldLabel(field)"
             @input="
               (e) => update(field.key, (e.target as HTMLInputElement).value)
             " /></template></van-field
@@ -89,7 +100,7 @@ function confirm(e: { selectedValues: Array<string | number> }) {
         v-else
         :model-value="String(modelValue[field.key] ?? '')"
         :name="field.key"
-        :label="field.label"
+        :label="fieldLabel(field)"
         label-align="top"
         :type="
           field.type === 'textarea'
@@ -106,23 +117,30 @@ function confirm(e: { selectedValues: Array<string | number> }) {
         :autocomplete="field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : 'off'"
         :required="field.required"
         :maxlength="field.max_length"
-        :placeholder="field.help_text || `请输入${field.label}`"
-        :rules="[{ required: field.required, message: `请填写${field.label}` }]"
+        :placeholder="
+          field.help_text || t(`请输入${fieldLabel(field)}`, `Please enter ${fieldLabel(field)}`)
+        "
+        :rules="[
+          {
+            required: field.required,
+            message: t(`请填写${fieldLabel(field)}`, `Please enter ${fieldLabel(field)}`),
+          },
+        ]"
         @update:model-value="
           (v) => update(field.key, field.type === 'number' && v !== '' ? Number(v) : v)
         " /></template
     ><van-popup v-model:show="popup" position="bottom" round safe-area-inset-bottom
       ><van-picker
         v-if="selected?.type === 'select'"
-        :title="selected.label"
+        :title="fieldLabel(selected)"
         :columns="selected.options.map((o) => ({ text: o.label, value: o.key }))"
-        confirm-button-text="确认"
-        cancel-button-text="取消"
+        :confirm-button-text="t('确认', 'Confirm')"
+        :cancel-button-text="t('取消', 'Cancel')"
         @confirm="confirm"
         @cancel="popup = false"
       />
       <div v-else-if="selected" class="multi-picker">
-        <h3>{{ selected.label }}</h3>
+        <h3>{{ fieldLabel(selected) }}</h3>
         <van-checkbox-group v-model="multiple"
           ><van-checkbox v-for="option in selected.options" :key="option.key" :name="option.key">{{
             option.label
@@ -134,7 +152,7 @@ function confirm(e: { selectedValues: Array<string | number> }) {
             update(selected!.key, multiple);
             popup = false;
           "
-          >确认选择</van-button
+          >{{ t('确认选择', 'Confirm selection') }}</van-button
         >
       </div></van-popup
     >

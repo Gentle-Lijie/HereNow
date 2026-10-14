@@ -7,7 +7,10 @@ import {
   upgradeLegacyEventConfig,
   validateAnswers,
   locationSchema,
+  checkinOpensAt,
+  type EventRecord,
 } from '../packages/contracts/src/index.js';
+import { available } from '../apps/api/src/services/events.js';
 import { haversine, normalizeCenter, locationDecision } from '../apps/api/src/services/location.js';
 const event = eventInputSchema.parse({
   name: '测试活动',
@@ -121,6 +124,37 @@ describe('identity and field boundaries', () => {
       }).success,
     ).toBe(false);
     expect(eventInputSchema.safeParse({ ...event, ends_at: event.starts_at }).success).toBe(false);
+  });
+});
+describe('early check-in window', () => {
+  it('defaults old configurations to zero and rejects invalid offsets', () => {
+    expect(event.checkin_early_minutes).toBe(0);
+    for (const value of [-1, 1441, 1.5, null])
+      expect(eventInputSchema.safeParse({ ...event, checkin_early_minutes: value }).success).toBe(
+        false,
+      );
+  });
+  it('opens exactly at the UTC early boundary and retains state and deadline gates', () => {
+    const active: EventRecord = {
+      ...event,
+      checkin_early_minutes: 30,
+      id: '1',
+      public_id: 'test-only',
+      state: 'PUBLISHED',
+      policy_epoch: 1,
+      form_version: 1,
+      created_at: event.starts_at,
+      checkin_count: 0,
+      participant_count: 0,
+      pending_count: 0,
+    };
+    const opening = Date.parse('2025-12-31T23:30:00Z');
+    expect(checkinOpensAt(active)).toBe(opening);
+    expect(() => available(active, opening - 1)).toThrow();
+    expect(() => available(active, opening)).not.toThrow();
+    expect(() => available({ ...active, state: 'PAUSED' }, opening)).toThrow('暂停');
+    expect(() => available({ ...active, state: 'CLOSED' }, opening)).toThrow();
+    expect(() => available(active, Date.parse(active.ends_at))).toThrow();
   });
 });
 describe('location rules', () => {

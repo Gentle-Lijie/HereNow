@@ -298,6 +298,8 @@ onBeforeUnmount(() => {
                 <path d="M6 2v4m8-4v4M3 9h14" /></svg
               >{{ formatTime(publicSession.event.starts_at, publicSession.event.timezone) }} —
               {{ formatTime(publicSession.event.ends_at, publicSession.event.timezone) }}</span
+            ><span v-if="publicSession.event.checkin_early_minutes > 0">
+              提前 {{ publicSession.event.checkin_early_minutes }} 分钟开放签到 </span
             ><span v-if="publicSession.event.location_label"
               ><svg viewBox="0 0 20 20" aria-hidden="true">
                 <path d="M16 8c0 5-6 10-6 10S4 13 4 8a6 6 0 1 1 12 0Z" />

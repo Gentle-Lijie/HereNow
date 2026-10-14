@@ -562,6 +562,72 @@ describe('real MySQL check-in transactions', () => {
     }
     expect((await c.call('POST', '/api/public/checkins', submission(), h)).statusCode).toBe(200);
   });
+  it('supports online and manual early check-in and invalidates old sessions on offset edits', async () => {
+    const e = await create({
+      starts_at: new Date(Date.now() + 15 * 60000).toISOString(),
+      checkin_early_minutes: 30,
+    });
+    const token = await publish(e),
+      c = await new Client().context(),
+      selector = await c.scan(e, token);
+    const h = headers(selector);
+    const first = await c.call('POST', '/api/public/checkins', submission('early-online'), h);
+    expect(first.statusCode).toBe(200);
+    expect(
+      (
+        await admin.call('POST', `/api/admin/events/${e.id}/checkins/manual`, {
+          submission: submission('early-manual'),
+          reason: '提前签到测试',
+          status: 'CHECKED_IN',
+        })
+      ).statusCode,
+    ).toBe(200);
+    const pending = await new Client().context(),
+      pendingSelector = await pending.scan(e, token);
+    const configBody = eventInputSchema.parse(
+      Object.fromEntries(Object.entries(e).filter(([key]) => key in eventInputSchema.shape)),
+    );
+    const update = await admin.call('PATCH', `/api/admin/events/${e.id}`, {
+      ...configBody,
+      checkin_early_minutes: 20,
+    });
+    expect(update.statusCode).toBe(200);
+    expect(update.json().event.policy_epoch).toBe(e.policy_epoch + 2);
+    expect(
+      (
+        await pending.call(
+          'POST',
+          '/api/public/checkins',
+          submission('pending'),
+          headers(pendingSelector),
+        )
+      ).json().code,
+    ).toBe('RULE_CHANGED');
+    expect(
+      (await c.call('POST', '/api/public/checkins', submission('early-online'), h)).json()
+        .receipt_id,
+    ).toBe(first.json().receipt_id);
+  });
+  it('rejects QR issuance and manual sign-ins before the configured early opening', async () => {
+    const e = await create({
+      starts_at: new Date(Date.now() + 60 * 60000).toISOString(),
+      ends_at: new Date(Date.now() + 120 * 60000).toISOString(),
+      checkin_early_minutes: 30,
+    });
+    expect((await admin.call('POST', `/api/admin/events/${e.id}/publish`)).statusCode).toBe(200);
+    expect(
+      (await admin.call('POST', `/api/admin/events/${e.id}/display-sessions`)).json().code,
+    ).toBe('ACTIVITY_UNAVAILABLE');
+    expect(
+      (
+        await admin.call('POST', `/api/admin/events/${e.id}/checkins/manual`, {
+          submission: submission('too-early'),
+          reason: '窗口前测试',
+          status: 'CHECKED_IN',
+        })
+      ).json().code,
+    ).toBe('ACTIVITY_UNAVAILABLE');
+  });
   it('rejects manual sign-ins for drafts and activities that have not started', async () => {
     const draft = await create();
     const request = { submission: submission(), reason: '提前测试', status: 'CHECKED_IN' };

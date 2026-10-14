@@ -62,6 +62,7 @@ export const eventInputSchema = z
     contact: z.string().max(200).default(''),
     category: z.enum(['internal', 'external']).default('internal'),
     starts_at: z.iso.datetime(),
+    checkin_early_minutes: z.number().int().min(0).max(1440).default(0),
     ends_at: z.iso.datetime(),
     timezone: z
       .string()
@@ -106,6 +107,9 @@ export const eventInputSchema = z
   });
 export type Field = z.infer<typeof fieldSchema>;
 export type EventInput = z.infer<typeof eventInputSchema>;
+export function checkinOpensAt(event: Pick<EventInput, 'starts_at' | 'checkin_early_minutes'>) {
+  return Date.parse(event.starts_at) - (event.checkin_early_minutes ?? 0) * 60000;
+}
 export type EventState = 'DRAFT' | 'PUBLISHED' | 'PAUSED' | 'CLOSED';
 export type CheckinState = 'CHECKED_IN' | 'PENDING_REVIEW' | 'REVOKED';
 export type Answer = string | number | boolean | string[];

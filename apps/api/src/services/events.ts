@@ -5,7 +5,10 @@ import type {
   Answers,
   CheckinRecord,
 } from '../../../../packages/contracts/src/index.js';
-import { upgradeLegacyEventConfig } from '../../../../packages/contracts/src/index.js';
+import {
+  checkinOpensAt,
+  upgradeLegacyEventConfig,
+} from '../../../../packages/contracts/src/index.js';
 import { db, rows, execute, type Sql } from '../db.js';
 import { fail } from './security.js';
 export interface EventRow {
@@ -46,12 +49,8 @@ export async function getEvent(
   if (!r[0]) return fail('NOT_FOUND', '活动不存在', 404);
   return fromEvent(r[0]);
 }
-export function available(e: EventRecord) {
-  if (
-    e.state !== 'PUBLISHED' ||
-    Date.now() < Date.parse(e.starts_at) ||
-    Date.now() >= Date.parse(e.ends_at)
-  )
+export function available(e: EventRecord, now = Date.now()) {
+  if (e.state !== 'PUBLISHED' || now < checkinOpensAt(e) || now >= Date.parse(e.ends_at))
     fail(
       'ACTIVITY_UNAVAILABLE',
       e.state === 'PAUSED' ? '活动已暂停，请联系现场工作人员' : '活动尚未开始或已结束',

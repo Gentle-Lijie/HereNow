@@ -29,7 +29,7 @@ import {
   type EventRecord,
   type Field,
 } from '../../../../packages/contracts/src/index';
-import { api, errorMessage } from '../services/api';
+import { api, errorMessage, formatTime } from '../services/api';
 import { toZonedInput, fromZonedInput } from '../services/time';
 import MapPicker from './MapPicker.vue';
 const route = useRoute(),
@@ -54,6 +54,16 @@ const form = reactive(
 form.name = '';
 form.organizer = '';
 const locked = computed(() => Boolean(event.value?.configuration_locked));
+const checkinStartPreview = computed(() => {
+  try {
+    const opening =
+      Date.parse(fromZonedInput(starts.value, form.timezone)) -
+      (form.checkin_early_minutes ?? 0) * 60000;
+    return formatTime(new Date(opening).toISOString(), form.timezone);
+  } catch {
+    return '请填写有效的开始时间';
+  }
+});
 const labels: Record<Field['type'], string> = {
   text: '单行文本',
   textarea: '多行文本',
@@ -262,7 +272,7 @@ onMounted(load);
                     { value: 'external', label: '对外活动' },
                   ]" /></a-form-item
               ><label class="field-group"
-                ><span class="field-label">开始时间 *</span
+                ><span class="field-label">活动开始时间 *</span
                 ><input
                   v-model="starts"
                   class="native-input"
@@ -279,6 +289,20 @@ onMounted(load);
                   :disabled="event?.state === 'CLOSED'"
               /></label>
             </div>
+            <a-form-item
+              label="活动开始前开放签到"
+              :extra="`签到开放时间：${checkinStartPreview}；0 表示活动开始时开放`"
+            >
+              <a-input-number
+                v-model:value="form.checkin_early_minutes"
+                :min="0"
+                :max="1440"
+                :precision="0"
+                style="width: 100%"
+              >
+                <template #addonAfter>分钟</template>
+              </a-input-number>
+            </a-form-item>
             <a-form-item label="活动时区（上方时间按此时区填写）"
               ><a-select
                 v-model:value="form.timezone"

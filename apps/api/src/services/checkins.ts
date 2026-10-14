@@ -7,6 +7,7 @@ import type {
 import { rosterValue, validateAnswers } from '../../../../packages/contracts/src/index.js';
 import { db, rows, execute, transaction, type Sql } from '../db.js';
 import { available, getEvent, readCheckin, decode } from './events.js';
+import { checkinOpensAt } from '../../../../packages/contracts/src/index.js';
 import { browserDigest, digest, encrypt, randomToken, fail } from './security.js';
 import { rosterDigest, claimFieldValues } from './field-values.js';
 import { locationDecision } from './location.js';
@@ -177,7 +178,7 @@ export async function manual(
   status: 'CHECKED_IN' | 'PENDING_REVIEW',
   sql: Sql,
 ) {
-  if (event.state === 'DRAFT' || Date.now() < Date.parse(event.starts_at))
+  if (event.state === 'DRAFT' || Date.now() < checkinOpensAt(event))
     fail('ACTIVITY_UNAVAILABLE', '活动未发布或尚未开始，不能进行人工补签');
   const p = await prepare(event, input, sql);
   const result = await execute(

@@ -13,7 +13,11 @@ import {
   CheckCircleOutlined,
 } from '@ant-design/icons-vue';
 import { useRouter } from 'vue-router';
-import { stateLabels, type EventRecord } from '../../../../packages/contracts/src/index';
+import {
+  checkinOpensAt,
+  stateLabels,
+  type EventRecord,
+} from '../../../../packages/contracts/src/index';
 import { api, errorMessage, formatTime, session } from '../services/api';
 const events = ref<EventRecord[]>([]),
   loading = ref(true),
@@ -29,9 +33,7 @@ const tabs = [
   { key: 'CLOSED', label: '已结束' },
 ];
 const live = (e: EventRecord) =>
-  e.state === 'PUBLISHED' &&
-  Date.parse(e.starts_at) <= Date.now() &&
-  Date.parse(e.ends_at) > Date.now();
+  e.state === 'PUBLISHED' && checkinOpensAt(e) <= Date.now() && Date.parse(e.ends_at) > Date.now();
 const visible = computed(() =>
   events.value.filter(
     (e) =>
@@ -161,7 +163,7 @@ onMounted(refresh);
                 event.state === 'PUBLISHED'
                   ? live(event)
                     ? '签到进行中'
-                    : Date.parse(event.starts_at) > Date.now()
+                    : checkinOpensAt(event) > Date.now()
                       ? '即将开始'
                       : '签到已截止'
                   : stateLabels[event.state]

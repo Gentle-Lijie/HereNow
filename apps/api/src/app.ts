@@ -375,6 +375,7 @@ export async function buildApp() {
         structureChanged ||
         [
           'starts_at',
+          'checkin_early_minutes',
           'ends_at',
           'admission',
           'location_mode',

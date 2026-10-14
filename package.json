@@ -28,7 +28,8 @@
     "backup:verify": "tsx scripts/verify-backup.ts",
     "format": "prettier --write apps packages scripts tests *.ts *.js *.json",
     "format:check": "prettier --check apps packages scripts tests *.ts *.js *.json",
-    "check:bundle": "tsx scripts/check-bundle.ts"
+    "check:bundle": "tsx scripts/check-bundle.ts",
+    "admin:reset-password": "tsx scripts/reset-admin-password.ts"
   },
   "dependencies": {
     "@ant-design/icons-vue": "7.0.1",

@@ -9,6 +9,7 @@ import { config } from '../apps/api/src/config.js';
 import { eventInputSchema, type EventRecord } from '../packages/contracts/src/index.js';
 import { randomToken, digest, identityDigest } from '../apps/api/src/services/security.js';
 import { createTestAdmin } from './fixtures/admin.js';
+import { resetAdminPassword } from '../apps/api/src/services/accounts.js';
 let testAdmin: Awaited<ReturnType<typeof createTestAdmin>> | undefined;
 const operators: string[] = [];
 let app: FastifyInstance;
@@ -501,5 +502,65 @@ describe('real MySQL check-in transactions', () => {
       (await admin.call('POST', `/api/admin/events/${future.id}/checkins/manual`, request))
         .statusCode,
     ).toBe(400);
+  });
+  it('explicit password reset changes database authentication and revokes old sessions', async () => {
+    const fixture = await createTestAdmin();
+    const client = await new Client().context();
+    const password = randomToken();
+    try {
+      expect(
+        (
+          await client.call('POST', '/api/admin/login', {
+            username: fixture.username,
+            password: fixture.password,
+          })
+        ).statusCode,
+      ).toBe(200);
+      await resetAdminPassword(fixture.username, password);
+      expect((await client.call('GET', '/api/admin/events')).statusCode).toBe(401);
+      const fresh = await new Client().context();
+      expect(
+        (
+          await fresh.call('POST', '/api/admin/login', {
+            username: fixture.username,
+            password: fixture.password,
+          })
+        ).statusCode,
+      ).toBe(401);
+      expect(
+        (await fresh.call('POST', '/api/admin/login', { username: fixture.username, password }))
+          .statusCode,
+      ).toBe(200);
+      const [entry] = await rows<{ action: string; reason: string }>(
+        db,
+        'SELECT action,reason FROM audit_logs WHERE user_id=? AND action=?',
+        [fixture.id, 'RESET_ADMIN_PASSWORD'],
+      );
+      expect(entry?.action).toBe('RESET_ADMIN_PASSWORD');
+      expect(entry?.reason).not.toContain(password);
+    } finally {
+      await fixture.dispose();
+    }
+  });
+  it('password reset refuses empty passwords, missing admins and operator promotion', async () => {
+    await expect(
+      resetAdminPassword('missing_admin_' + randomToken(), randomToken()),
+    ).rejects.toThrow('指定管理员不存在');
+    await expect(resetAdminPassword('admin', '')).rejects.toThrow();
+    const username = 'reset_operator_' + randomToken();
+    const result = await execute(
+      db,
+      "INSERT INTO users(username,password_hash,role) VALUES (?,?,'operator')",
+      [username, await hash(randomToken())],
+    );
+    try {
+      await expect(resetAdminPassword(username, randomToken())).rejects.toThrow('指定管理员不存在');
+      const [user] = await rows<{ role: string }>(db, 'SELECT role FROM users WHERE id=?', [
+        result.insertId,
+      ]);
+      expect(user?.role).toBe('operator');
+    } finally {
+      await execute(db, 'DELETE FROM users WHERE id=?', [result.insertId]);
+    }
   });
 });

@@ -30,7 +30,9 @@ try {
     ]);
     console.log('Created explicitly labeled local example event (no fabricated check-ins).');
   }
-  console.log('Local administrator ready; credentials are in .env.');
+  console.log(
+    '管理员初始化完成；已有账号密码不会被覆盖。修改密码请运行 npm run admin:reset-password。',
+  );
 } finally {
   await db.end();
 }

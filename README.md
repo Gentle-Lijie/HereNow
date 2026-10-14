@@ -12,7 +12,15 @@ npm run setup
 npm run dev
 ```
 
-首次没有 `.env` 时，setup 从 `.env.example` 生成密钥与管理员密码。填写本机数据库连接后再次运行 setup；它创建独立数据库、应用迁移和后台账号。当前机器已初始化 `herenow_dev`，用户名 `admin`，管理员密码见本地 `.env` 的 `ADMIN_PASSWORD`。数据库密码与管理员密码分别配置。
+首次没有 `.env` 时，setup 从 `.env.example` 生成密钥与管理员初始密码。填写本机数据库连接后再次运行 setup；它创建独立数据库、应用迁移和后台账号。`ADMIN_USERNAME` / `ADMIN_PASSWORD` 只用于首次创建账号，已有账号的密码摘要保存在数据库中，修改 `.env` 或重复运行 setup 不会自动覆盖。数据库密码与后台登录密码分别配置。
+
+要修改已存在管理员的密码，先设置 `.env` 中的 `ADMIN_USERNAME`、`ADMIN_PASSWORD`，再运行：
+
+```sh
+npm run admin:reset-password
+```
+
+此命令仅更新指定管理员，不创建账号或提升操作员权限，并撤销该账号旧的登录会话。执行后立即使用新密码登录，无需重启 API；密码不会写进命令输出或审计日志。
 
 默认预览：[http://localhost:5173](http://localhost:5173)。默认 API：[http://127.0.0.1:3001/api/health](http://127.0.0.1:3001/api/health)。`npm run dev` 同时启动两端，但 Vite 会等待 API 健康检查（含数据库）通过后才开始监听，避免初次打开页面时代理连接被拒绝。最多等待 60 秒，失败时显示 API / MySQL 排查提示。
 

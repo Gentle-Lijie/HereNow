@@ -20,6 +20,7 @@ export async function createTestAdmin() {
     async dispose() {
       await execute(db, 'DELETE FROM admin_sessions WHERE user_id=?', [id]);
       await execute(db, 'DELETE FROM event_members WHERE user_id=?', [id]);
+      await execute(db, 'DELETE FROM audit_logs WHERE user_id=?', [id]);
       await execute(db, 'DELETE FROM users WHERE id=?', [id]);
     },
   };

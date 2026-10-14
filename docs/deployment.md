@@ -72,6 +72,8 @@ curl --fail https://checkin-api.lijie.space/api/health
 
 ## 验证状态
 
+2026-10-14 线上转发修复：实际 HTTPS 探针确认原 POST 的字节数保持，但内容被错误复制为全零，导致 JSON 登录请求返回 INVALID_REQUEST 400。EdgeOne reader 的 chunk 支持 ArrayBuffer，与 Node 的 Uint8Array 返回值不同；转发先在运行时规范化 ArrayBuffer / ArrayBufferView，再按原始字节复制，明确使用 ArrayBuffer 与准确 Content-Length 发送。增加真实平台 chunk 形态的回归测试，保留 6 MB 上限和幂等原请求；生产链路在 Git 自动部署后复验。诊断只使用无凭证测试内容，临时诊断路由完成后已移除。
+
 - 本地类型检查、lint、格式检查、68 项测试通过；包含固定目标转发、Cookie / CSRF / 幂等传递、IP 伪造头剥离与密钥缺失拒绝，以及超过 1 MB 的名单请求按原始字节转发、超过 6 MB 的上传拒绝。EdgeOne 请求便捷读取方法有 1 MB 限制，转发使用有上限的 ReadableStream 读取。
 - 已用锁定 Node 22.14.0 执行实际 Makers 前端构建命令，产物根目录有 index.html，后端 TypeScript 编译通过。
 - 后端版本化迁移、生产管理员初始化、systemd API 与定时任务启用完成；HTTPS 健康接口返回 OK，直接访问源站业务 API 与外部 OPTIONS 返回 403。以实际转发代码连接 HTTPS 源站，验证 Cookie 安全标记、生产管理员登录、鉴权请求、Origin 拒绝和退出通过，没有创建演示活动。

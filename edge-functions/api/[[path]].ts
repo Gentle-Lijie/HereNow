@@ -20,9 +20,16 @@ const error = (code: string, message: string, status: number) =>
   });
 const maxBodyBytes = 6 * 1024 * 1024; // Allows a 5 MB import plus multipart overhead.
 class BodyTooLarge extends Error {}
-async function readBody(request: Request): Promise<Uint8Array<ArrayBuffer>> {
+function chunkBytes(value: unknown): Uint8Array {
+  // EdgeOne stream readers return ArrayBuffer; Node/browser readers use Uint8Array views.
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (ArrayBuffer.isView(value))
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  throw new Error('Unsupported request stream chunk');
+}
+async function readBody(request: Request): Promise<ArrayBuffer> {
   if (Number(request.headers.get('content-length')) > maxBodyBytes) throw new BodyTooLarge();
-  if (!request.body) return new Uint8Array();
+  if (!request.body) return new ArrayBuffer(0);
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
@@ -30,12 +37,13 @@ async function readBody(request: Request): Promise<Uint8Array<ArrayBuffer>> {
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
-      size += value.byteLength;
+      const chunk = chunkBytes(value);
+      size += chunk.byteLength;
       if (size > maxBodyBytes) {
         await reader.cancel();
         throw new BodyTooLarge();
       }
-      chunks.push(value);
+      chunks.push(chunk);
     }
   } finally {
     reader.releaseLock();
@@ -46,7 +54,8 @@ async function readBody(request: Request): Promise<Uint8Array<ArrayBuffer>> {
     body.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return body;
+  // Pass the backing ArrayBuffer explicitly; runtimes differ in handling typed-array views.
+  return body.buffer;
 }
 
 export async function onRequest({ request, env }: ProxyContext): Promise<Response> {
@@ -67,11 +76,13 @@ export async function onRequest({ request, env }: ProxyContext): Promise<Respons
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);
   try {
+    const body = ['GET', 'HEAD'].includes(request.method) ? undefined : await readBody(request);
+    if (body !== undefined) headers.set('content-length', String(body.byteLength));
     const upstream = await fetch(target, {
       method: request.method,
       headers,
       // The EdgeOne arrayBuffer()/text() helpers have a 1 MB limit; use bounded stream reads.
-      body: ['GET', 'HEAD'].includes(request.method) ? undefined : await readBody(request),
+      body,
       signal: controller.signal,
       redirect: 'manual',
     });

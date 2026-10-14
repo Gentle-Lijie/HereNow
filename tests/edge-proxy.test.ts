@@ -55,6 +55,10 @@ describe('Makers API transport', () => {
     expect(headers.get('x-herenow-client-ip')).toBe('203.0.113.8');
     expect(headers.get('x-herenow-proxy-secret')).toBe(env.API_PROXY_SECRET);
     expect(new TextDecoder().decode(options.body as ArrayBuffer)).toBe(original);
+    expect(options.body).toBeInstanceOf(ArrayBuffer);
+    expect(headers.get('content-length')).toBe(
+      String(new TextEncoder().encode(original).byteLength),
+    );
     expect(options.redirect).toBe('manual');
     expect(response.headers.get('set-cookie')).toContain('hn_admin=test');
     expect(response.headers.get('cache-control')).toBe('no-store');
@@ -84,8 +88,9 @@ describe('Makers API transport', () => {
     });
     const helper = vi.spyOn(request, 'arrayBuffer').mockRejectedValue(new Error('OverSize'));
     const fetcher = vi.fn(async (_url: URL, options: RequestInit) => {
-      expect(options.body).toBeInstanceOf(Uint8Array);
-      expect(Buffer.from(options.body as Uint8Array).equals(Buffer.from(original))).toBe(true);
+      expect(options.body).toBeInstanceOf(ArrayBuffer);
+      expect(Buffer.from(options.body as ArrayBuffer).equals(Buffer.from(original))).toBe(true);
+      expect(new Headers(options.headers).get('content-length')).toBe(String(original.byteLength));
       expect(new Headers(options.headers).get('content-type')).toBe(
         'multipart/form-data; boundary=test',
       );
@@ -105,5 +110,27 @@ describe('Makers API transport', () => {
     vi.stubGlobal('fetch', fetcher);
     expect((await onRequest({ request, env })).status).toBe(413);
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('preserves JSON bytes when the platform stream yields ArrayBuffer chunks', async () => {
+    const original = new TextEncoder().encode('{"text":"中文","code":"000123"}');
+    const request = new Request('https://checkin.lijie.space/api/admin/login', { method: 'POST' });
+    // The EdgeOne reader differs from the DOM type, so model its runtime boundary explicitly.
+    const stream = new ReadableStream<unknown>({
+      start(controller) {
+        controller.enqueue(original.slice(0, 15).buffer);
+        controller.enqueue(original.slice(15).buffer);
+        controller.close();
+      },
+    });
+    vi.spyOn(request, 'body', 'get').mockReturnValue(stream as ReadableStream<Uint8Array>);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: URL, options: RequestInit) => {
+        expect(Buffer.from(options.body as ArrayBuffer).equals(Buffer.from(original))).toBe(true);
+        return new Response('{}');
+      }),
+    );
+    expect((await onRequest({ request, env })).status).toBe(200);
   });
 });

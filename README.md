@@ -2,17 +2,31 @@
 
 Vue 3 活动签到工具。后台采用 Ant Design Vue，手机签到采用 Vant，API 使用 Fastify 与本机 MySQL。当前是可运行的核心开发版本；上线条件与尚未实测项见 [实施与验收记录](docs/implementation-status.md)。
 
+## 当前功能
+
+- 后台统一顶部导航，集中提供活动工作台、创建活动、账号与退出入口；手机窄屏自动换行，页面统一纯白背景和紧凑排版。
+- 活动草稿、发布、暂停、恢复与关闭，开放签到或名单准入，CSV / XLSX 名单预览和整批导入。
+- 自定义字段分别控制必填、是否允许重复及名单匹配，没有必需的固定身份字段。
+- 动态活动二维码、手机无登录签到、后端围栏校验和幂等提交；后台记录、人工补签、核验、撤销、恢复及 XLSX 导出。
+- 高德地图搜索与选点、管理员当前定位、受限安全代理，以及数据保留清理、备份和隔离恢复验证。
+
 ## 本地启动
 
-需要 Node.js 22+ 与可登录的本机 MySQL（目标基线 8.4；本机实际验证为 9.3.0）。
+需要 Node.js 22+（建议使用受支持的 LTS）、npm 与可登录的本机 MySQL（目标基线 8.4；本机实际验证为 9.3.0）。使用普通应用进程，不依赖 Docker。
 
 ```sh
 npm ci
 npm run setup
-npm run dev
 ```
 
-首次没有 `.env` 时，setup 从 `.env.example` 生成密钥与管理员初始密码。填写本机数据库连接后再次运行 setup；它创建独立数据库、应用迁移和后台账号。`ADMIN_USERNAME` / `ADMIN_PASSWORD` 只用于首次创建账号，已有账号的密码摘要保存在数据库中，修改 `.env` 或重复运行 setup 不会自动覆盖。数据库密码与后台登录密码分别配置。
+首次没有 `.env` 时，setup 从 `.env.example` 生成密钥与管理员初始密码；此时先填写本机数据库连接，再次运行 `npm run setup`，完成后才运行 `npm run dev`。第二次 setup 创建独立数据库、应用迁移和后台账号。`ADMIN_USERNAME` / `ADMIN_PASSWORD` 只用于首次创建账号，已有账号的密码摘要保存在数据库中，修改 `.env` 或重复运行 setup 不会自动覆盖。数据库密码与后台登录密码分别配置。
+
+填写配置后启动：
+
+```sh
+npm run setup
+npm run dev
+```
 
 要修改已存在管理员的密码，先设置 `.env` 中的 `ADMIN_USERNAME`、`ADMIN_PASSWORD`，再运行：
 
@@ -52,11 +66,13 @@ AMAP_SECURITY_JS_CODE=配套的安全密钥
 
 `VITE_AMAP_KEY` 是浏览器可见的 JS API Key；`AMAP_SECURITY_JS_CODE` 仅在后端读取，不得加 `VITE_` 前缀或提交到仓库。修改后重启前后端；构建部署需要重新构建前端。
 
-SDK 加载前设置 `_AMapSecurityConfig.serviceHost` 为同源 `/api/_AMapService`。Fastify 在转发时添加 `jscode`，只允许当前后台管理员访问指定的SDK 初始化、地点搜索与地图样式接口，校验参数、限制请求频率、超时和响应大小，不转发浏览器 Cookie 或授权头，也不跟随上游重定向。开发环境沿用 Vite 的 `/api` 代理，无须额外 Nginx。该受限代理不开放任意高德 API 或任意 URL 转发。
+SDK 加载前设置 `_AMapSecurityConfig.serviceHost` 为同源 `/api/_AMapService`。Fastify 在转发时添加 `jscode`，只允许当前后台管理员访问指定的 SDK 初始化、地点搜索与地图样式接口，校验参数、限制请求频率、超时和响应大小，不转发浏览器 Cookie 或授权头，也不跟随上游重定向。开发环境沿用 Vite 的 `/api` 代理，无须额外 Nginx。该受限代理不开放任意高德 API 或任意 URL 转发。
 
 地图仅在后台打开选点界面后加载，参与端默认使用标准浏览器定位。管理员尚未设置中心时，打开选点弹窗自动尝试当前定位；已有中心不自动覆盖，可点击“定位到我附近”重新定位。浏览器会请求位置授权，需使用 HTTPS 或 localhost；拒绝或失败可继续搜索／选点。定位只更新待确认位置，不会自动保存。Key 缺失与安全密钥未配置分别明确提示，配置缺失不能靠页面重试解决；网络失败或超时后可点击“重试加载地图”。未保存过中心时，备用经纬度保持空白，必须明确填写坐标后才能确认。没有有效授权时，只能验收错误处理、受限代理及模拟 SDK 交互，不能宣称真实 POI 搜索、点击、拖动与围栏预览已经通过。
 
 WGS84 / GCJ-02 转换采用固定版本 gcoord，包含工程误差预算；已知点与手机现场精度仍需实际验证。
+
+“暂时无法获取当前位置”表示浏览器原生定位返回位置不可用，与高德 Key / 安全密钥是否配置正确是独立问题。请分别检查网站定位授权、系统定位服务及浏览器的系统授权；这些均开启后仍失败，可更新浏览器或换用其他浏览器验证。后台可以搜索或手动选点，参与者不能手选坐标通过签到。
 
 ## 验证命令
 
@@ -71,6 +87,8 @@ npm run test:load
 ```
 
 集成测试只使用独立 `herenow_test`，创建明确标记的临时活动并清理；包含真实唯一索引、事务回滚、并发、幂等和权限检查。压测走本机 HTTP 与 MySQL，不能替代线上资源配置或手机网络测量。
+
+近期验收包括自定义字段重复规则的 63 项测试，以及统一导航在 Chrome / Edge、320–1440 px 下的交互与截图检查。手机真机扫码、现场定位精度及生产环境尚未完成验收；各次验证的实际范围见下方记录。
 
 ## 本机构建运行与运维
 
@@ -101,3 +119,7 @@ IP 默认取 socket，不信任任意 `X-Forwarded-For`。只有实际经过可�
 - [AI 开发约定](AGENTS.md)
 - [Ant Design MCP](docs/mcp-setup.md)
 - [实施与验收记录](docs/implementation-status.md)
+- [统一导航验收](docs/admin-navigation-validation.md)
+- [自定义字段规则验收](docs/custom-field-rules-validation.md)
+- [地图与管理员定位验收](docs/admin-location-validation.md)
+- [紧凑界面验收](docs/ui-refinement-validation.md)

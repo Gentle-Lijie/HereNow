@@ -15,6 +15,7 @@ import {
   validateAnswers,
   checkinInputSchema,
   type EventInput,
+  type EventRecord,
   type Answers,
   type ImportPreview,
   type Participant,
@@ -54,6 +55,7 @@ import {
 import { resolveSession, submit, manual } from './services/checkins.js';
 import { normalizeCenter } from './services/location.js';
 import { normalizeEventLogo } from './services/event-logo.js';
+import { readDisplayEvent } from './services/display.js';
 import { parseImport, workbookBuffer } from './services/imports.js';
 interface User {
   id: string;
@@ -483,22 +485,34 @@ export async function buildApp() {
     reply.setCookie(`hn_display_${id}`, input.token, { ...cookieOptions, maxAge: 43200 });
     return { code: 'OK' };
   });
+  app.get('/api/display/events/:id/info', async (r) => {
+    const id = getId(r);
+    let e: EventRecord;
+    try {
+      e = await readDisplayEvent(id, r.cookies[`hn_display_${id}`]);
+    } catch (error) {
+      if (!(error instanceof AppError) || error.code !== 'UNAUTHORIZED' || !r.user) throw error;
+      // Metadata may still be shown to authorized staff after a display session expires.
+      // QR issuance below continues to require a valid display session and an open activity.
+      await authorize(r, id);
+      e = await getEvent(id);
+    }
+    return {
+      code: 'OK',
+      name: e.name,
+      location_label: e.location_label,
+      checkin_logo: e.checkin_logo,
+    };
+  });
   app.get('/api/display/events/:id/qr', async (r) => {
     const id = getId(r);
-    const token = r.cookies[`hn_display_${id}`];
-    if (!token) fail('UNAUTHORIZED', '请从后台打开电子码展示页', 401);
-    const [s] = await rows(
-      db,
-      'SELECT 1 FROM display_sessions WHERE token_digest=? AND event_id=? AND expires_at>UTC_TIMESTAMP(3) AND revoked=FALSE',
-      [digest(token!), id],
-    );
-    if (!s) fail('UNAUTHORIZED', '展示会话已过期', 401);
-    const e = await getEvent(id);
+    const e = await readDisplayEvent(id, r.cookies[`hn_display_${id}`]);
     available(e);
     return {
       code: 'OK',
       name: e.name,
       location_label: e.location_label,
+      checkin_logo: e.checkin_logo,
       token: await signQr(e),
       public_id: e.public_id,
       expires_at: new Date((Math.floor(Date.now() / 1000) + 45) * 1000).toISOString(),

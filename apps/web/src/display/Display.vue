@@ -3,10 +3,11 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute } from 'vue-router';
 import QRCode from 'qrcode';
 import { api, errorMessage } from '../services/api';
-import Brand from '../components/Brand.vue';
+import EventBrand from '../components/EventBrand.vue';
 const id = String(useRoute().params.id),
   name = ref('准备现场签到'),
   locationLabel = ref(''),
+  logo = ref<string | null>(null),
   qrImage = ref(''),
   joinUrl = ref(''),
   expires = ref(0),
@@ -24,9 +25,17 @@ let ticker: ReturnType<typeof setInterval> | undefined,
   alive = true;
 async function refresh() {
   try {
+    const info = await api<{ name: string; location_label: string; checkin_logo: string | null }>(
+      `/display/events/${id}/info`,
+    );
+    if (!alive) return;
+    name.value = info.name;
+    locationLabel.value = info.location_label;
+    logo.value = info.checkin_logo;
     const r = await api<{
       name: string;
       location_label: string;
+      checkin_logo: string | null;
       token: string;
       public_id: string;
       expires_at: string;
@@ -35,6 +44,7 @@ async function refresh() {
     if (!alive) return;
     name.value = r.name;
     locationLabel.value = r.location_label;
+    logo.value = r.checkin_logo;
     joinUrl.value = `${location.origin}/s/${r.public_id}#q=${r.token}`;
     const image = await QRCode.toDataURL(joinUrl.value, {
       width: 640,
@@ -96,7 +106,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="display-page">
     <header class="display-header">
-      <Brand />
+      <EventBrand :logo="logo" :name="name" :small="false" />
       <div class="display-controls">
         <RouterLink to="/admin">返回工作台</RouterLink
         ><button @click="toggleFullscreen">

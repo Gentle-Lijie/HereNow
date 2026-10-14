@@ -434,11 +434,13 @@ describe('real MySQL check-in transactions', () => {
     });
     const e = await create();
     expect((await c.call('GET', `/api/admin/events/${e.id}`)).statusCode).toBe(403);
+    expect((await c.call('GET', `/api/display/events/${e.id}/info`)).statusCode).toBe(403);
     await execute(db, 'INSERT INTO event_members(event_id,user_id) VALUES (?,?)', [
       e.id,
       user.insertId,
     ]);
     expect((await c.call('GET', `/api/admin/events/${e.id}`)).statusCode).toBe(200);
+    expect((await c.call('GET', `/api/display/events/${e.id}/info`)).statusCode).toBe(200);
     expect((await c.call('GET', `/api/admin/events/${e.id}/export`)).statusCode).toBe(403);
     await execute(db, 'DELETE FROM admin_sessions WHERE user_id=?', [user.insertId]);
     await execute(db, 'DELETE FROM event_members WHERE user_id=?', [user.insertId]);
@@ -616,6 +618,40 @@ describe('real MySQL check-in transactions', () => {
         )
       ).statusCode,
     ).toBe(200);
+  });
+  it('shares event branding with authorized displays while keeping paused QR issuance blocked', async () => {
+    const png = new PNG({ width: 2, height: 2 });
+    png.data.fill(128);
+    const e = await create({
+      checkin_logo: `data:image/png;base64,${PNG.sync.write(png).toString('base64')}`,
+    });
+    await publish(e);
+    expect((await admin.call('GET', `/api/display/events/${e.id}/info`)).json().checkin_logo).toBe(
+      e.checkin_logo,
+    );
+    expect((await admin.call('GET', `/api/display/events/${e.id}/qr`)).json().checkin_logo).toBe(
+      e.checkin_logo,
+    );
+    const anonymous = await new Client().context();
+    expect((await anonymous.call('GET', `/api/display/events/${e.id}/info`)).statusCode).toBe(401);
+    await admin.call('POST', `/api/admin/events/${e.id}/state`, { state: 'PAUSED' });
+    const paused = await admin.call('GET', `/api/display/events/${e.id}/info`);
+    expect(paused.statusCode).toBe(200);
+    expect(paused.json().checkin_logo).toBe(e.checkin_logo);
+    expect(Object.keys(paused.json()).sort()).toEqual([
+      'checkin_logo',
+      'code',
+      'location_label',
+      'name',
+    ]);
+    expect((await admin.call('GET', `/api/display/events/${e.id}/qr`)).json().code).toBe(
+      'ACTIVITY_UNAVAILABLE',
+    );
+    admin.cookies.delete(`hn_display_${e.id}`);
+    expect((await admin.call('GET', `/api/display/events/${e.id}/info`)).json().checkin_logo).toBe(
+      e.checkin_logo,
+    );
+    expect((await admin.call('GET', `/api/display/events/${e.id}/qr`)).statusCode).toBe(401);
   });
   it('supports online and manual early check-in and invalidates old sessions on offset edits', async () => {
     const e = await create({

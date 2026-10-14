@@ -14,7 +14,40 @@ const forwardedHeaders = [
   'idempotency-key',
 ];
 const error = (code: string, message: string, status: number) =>
-  Response.json({ code, message }, { status, headers: { 'Cache-Control': 'no-store' } });
+  new Response(JSON.stringify({ code, message }), {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
+const maxBodyBytes = 6 * 1024 * 1024; // Allows a 5 MB import plus multipart overhead.
+class BodyTooLarge extends Error {}
+async function readBody(request: Request): Promise<Uint8Array<ArrayBuffer>> {
+  if (Number(request.headers.get('content-length')) > maxBodyBytes) throw new BodyTooLarge();
+  if (!request.body) return new Uint8Array();
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBodyBytes) {
+        await reader.cancel();
+        throw new BodyTooLarge();
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const body = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return body;
+}
 
 export async function onRequest({ request, env }: ProxyContext): Promise<Response> {
   if (!env.API_PROXY_SECRET || env.API_PROXY_SECRET.length < 64)
@@ -37,7 +70,8 @@ export async function onRequest({ request, env }: ProxyContext): Promise<Respons
     const upstream = await fetch(target, {
       method: request.method,
       headers,
-      body: ['GET', 'HEAD'].includes(request.method) ? undefined : await request.arrayBuffer(),
+      // The EdgeOne arrayBuffer()/text() helpers have a 1 MB limit; use bounded stream reads.
+      body: ['GET', 'HEAD'].includes(request.method) ? undefined : await readBody(request),
       signal: controller.signal,
       redirect: 'manual',
     });
@@ -45,7 +79,8 @@ export async function onRequest({ request, env }: ProxyContext): Promise<Respons
     const response = new Response(upstream.body, upstream);
     response.headers.set('Cache-Control', 'no-store');
     return response;
-  } catch {
+  } catch (cause) {
+    if (cause instanceof BodyTooLarge) return error('PAYLOAD_TOO_LARGE', '上传内容过大', 413);
     return error('UPSTREAM_UNAVAILABLE', '网络连接中断，请使用原请求重试', 502);
   } finally {
     clearTimeout(timeout);

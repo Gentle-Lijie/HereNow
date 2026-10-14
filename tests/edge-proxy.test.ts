@@ -74,4 +74,36 @@ describe('Makers API transport', () => {
     expect(response.status).toBe(502);
     expect(await response.text()).not.toContain('internal credentials');
   });
+
+  it('transports imports above the runtime helper 1 MB limit without altering bytes', async () => {
+    const original = new Uint8Array(2 * 1024 * 1024).fill(123);
+    const request = new Request('https://checkin.lijie.space/api/admin/events/1/imports', {
+      method: 'POST',
+      body: original,
+      headers: { 'content-type': 'multipart/form-data; boundary=test' },
+    });
+    const helper = vi.spyOn(request, 'arrayBuffer').mockRejectedValue(new Error('OverSize'));
+    const fetcher = vi.fn(async (_url: URL, options: RequestInit) => {
+      expect(options.body).toBeInstanceOf(Uint8Array);
+      expect(Buffer.from(options.body as Uint8Array).equals(Buffer.from(original))).toBe(true);
+      expect(new Headers(options.headers).get('content-type')).toBe(
+        'multipart/form-data; boundary=test',
+      );
+      return new Response('{}');
+    });
+    vi.stubGlobal('fetch', fetcher);
+    expect((await onRequest({ request, env })).status).toBe(200);
+    expect(helper).not.toHaveBeenCalled();
+  });
+
+  it('bounds chunked uploads even when Content-Length is absent', async () => {
+    const request = new Request('https://checkin.lijie.space/api/admin/events/1/imports', {
+      method: 'POST',
+      body: new Uint8Array(6 * 1024 * 1024 + 1),
+    });
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+    expect((await onRequest({ request, env })).status).toBe(413);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
 });

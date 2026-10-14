@@ -19,7 +19,7 @@ import {
   type CheckinInput,
 } from '../../../../packages/contracts/src/index';
 import { api, ApiError, errorMessage, formatTime } from '../services/api';
-import Brand from '../components/Brand.vue';
+import EventBrand from '../components/EventBrand.vue';
 import MobileFields from './MobileFields.vue';
 const publicId = String(useRoute().params.publicId),
   sessionKey = `hn_session_${publicId}`,
@@ -248,7 +248,9 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <div class="checkin-page">
-    <header class="checkin-header"><Brand small /></header>
+    <header class="checkin-header">
+      <EventBrand :logo="publicSession?.event.checkin_logo" :name="publicSession?.event.name" />
+    </header>
     <main class="checkin-main">
       <div v-if="loading" class="checkin-loading">
         <van-loading size="25px" color="#d6603d">正在准备本次签到…</van-loading>

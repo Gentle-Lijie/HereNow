@@ -53,6 +53,7 @@ import {
 } from './services/events.js';
 import { resolveSession, submit, manual } from './services/checkins.js';
 import { normalizeCenter } from './services/location.js';
+import { normalizeEventLogo } from './services/event-logo.js';
 import { parseImport, workbookBuffer } from './services/imports.js';
 interface User {
   id: string;
@@ -241,6 +242,7 @@ export async function buildApp() {
   app.post('/api/admin/events', async (r) => {
     const user = admin(r);
     const input = body(eventInputSchema, r);
+    input.checkin_logo = normalizeEventLogo(input.checkin_logo);
     if (input.fields.length > 30) fail('INVALID_FORM', '新活动最多 30 个字段');
     const id = await transaction(async (c) => {
       const created = await execute(c, 'INSERT INTO events(public_id,config) VALUES (?,?)', [
@@ -278,6 +280,7 @@ export async function buildApp() {
     const user = admin(r),
       id = getId(r),
       input = body(eventInputSchema, r);
+    input.checkin_logo = normalizeEventLogo(input.checkin_logo);
     await transaction(async (c) => {
       const old = await getEvent(id, c, 'exclusive');
       if (old.state === 'CLOSED') fail('ACTIVITY_UNAVAILABLE', '已结束活动不能编辑');

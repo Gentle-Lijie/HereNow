@@ -50,6 +50,7 @@
     "gcoord": "1.0.7",
     "jose": "6.2.12",
     "mysql2": "3.24.6",
+    "pngjs": "7.0.0",
     "qrcode": "1.5.4",
     "vant": "4.10.2",
     "vue": "3.5.44",
@@ -59,6 +60,7 @@
   "devDependencies": {
     "@eslint/js": "9.39.5",
     "@types/node": "24.19.2",
+    "@types/pngjs": "6.0.5",
     "@types/qrcode": "1.5.6",
     "@vitejs/plugin-vue": "6.0.10",
     "concurrently": "9.2.5",

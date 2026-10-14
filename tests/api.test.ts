@@ -3,6 +3,7 @@ import type { FastifyInstance, HTTPMethods, InjectOptions } from 'fastify';
 import { hash } from '@node-rs/argon2';
 import { randomUUID } from 'node:crypto';
 import ExcelJS from 'exceljs';
+import { PNG } from 'pngjs';
 import { buildApp } from '../apps/api/src/app.js';
 import { db, execute, rows } from '../apps/api/src/db.js';
 import { config } from '../apps/api/src/config.js';
@@ -561,6 +562,60 @@ describe('real MySQL check-in transactions', () => {
       await execute(db, `DROP TRIGGER ${trigger}`);
     }
     expect((await c.call('POST', '/api/public/checkins', submission(), h)).statusCode).toBe(200);
+  });
+  it('stores logos per event, exposes them only after a valid scan, and preserves active sessions on presentation edits', async () => {
+    const png = new PNG({ width: 2, height: 2 });
+    png.data.fill(128);
+    const logo = `data:image/png;base64,${PNG.sync.write(png).toString('base64')}`;
+    const e = await create({ checkin_logo: logo }),
+      other = await create();
+    expect(e.checkin_logo).toMatch(/^data:image\/png;base64,/);
+    expect(other.checkin_logo).toBeNull();
+    const token = await publish(e),
+      client = await new Client().context();
+    const scan = await client.call('POST', '/api/public/check-in-sessions', {
+      token,
+      public_id: e.public_id,
+    });
+    expect(scan.statusCode).toBe(200);
+    expect(scan.json().event.checkin_logo).toBe(e.checkin_logo);
+    const configBody = eventInputSchema.parse(
+      Object.fromEntries(Object.entries(e).filter(([key]) => key in eventInputSchema.shape)),
+    );
+    const anonymous = await new Client().context();
+    expect(
+      (
+        await anonymous.call('PATCH', `/api/admin/events/${e.id}`, {
+          ...configBody,
+          checkin_logo: null,
+        })
+      ).statusCode,
+    ).toBe(401);
+    const invalid = await admin.call('PATCH', `/api/admin/events/${e.id}`, {
+      ...configBody,
+      checkin_logo: 'data:image/png;base64,AAAA',
+    });
+    expect(invalid.json().code).toBe('INVALID_FORM');
+    expect((await admin.call('GET', `/api/admin/events/${e.id}`)).json().event.checkin_logo).toBe(
+      e.checkin_logo,
+    );
+    const reset = await admin.call('PATCH', `/api/admin/events/${e.id}`, {
+      ...configBody,
+      checkin_logo: null,
+    });
+    expect(reset.statusCode).toBe(200);
+    expect(reset.json().event.policy_epoch).toBe(e.policy_epoch + 1);
+    expect(reset.json().event.checkin_logo).toBeNull();
+    expect(
+      (
+        await client.call(
+          'POST',
+          '/api/public/checkins',
+          submission('logo-session'),
+          headers(scan.json().session_id as string),
+        )
+      ).statusCode,
+    ).toBe(200);
   });
   it('supports online and manual early check-in and invalidates old sessions on offset edits', async () => {
     const e = await create({

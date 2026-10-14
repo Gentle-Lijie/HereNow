@@ -60,6 +60,15 @@ export const eventInputSchema = z
     description: z.string().max(2000).default(''),
     organizer: z.string().trim().min(1).max(120),
     contact: z.string().max(200).default(''),
+    checkin_logo: z
+      .string()
+      .max(32790)
+      .regex(
+        /^data:image\/png;base64,(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/,
+        'Logo 必须是处理后的 PNG 图片',
+      )
+      .nullable()
+      .default(null),
     category: z.enum(['internal', 'external']).default('internal'),
     starts_at: z.iso.datetime(),
     checkin_early_minutes: z.number().int().min(0).max(1440).default(0),

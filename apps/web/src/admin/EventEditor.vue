@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, computed } from 'vue';
+import { onMounted, onBeforeUnmount, reactive, ref, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   Button as AButton,
@@ -32,6 +32,34 @@ import {
 import { api, errorMessage, formatTime } from '../services/api';
 import { toZonedInput, fromZonedInput } from '../services/time';
 import MapPicker from './MapPicker.vue';
+import EventBrand from '../components/EventBrand.vue';
+import { prepareEventLogo } from '../services/event-logo';
+const logoInput = ref<HTMLInputElement>(),
+  logoLoading = ref(false);
+let logoRevision = 0;
+async function selectLogo(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  const revision = ++logoRevision;
+  logoLoading.value = true;
+  try {
+    const logo = await prepareEventLogo(file);
+    if (revision === logoRevision) {
+      form.checkin_logo = logo;
+      error.value = '';
+    }
+  } catch (cause) {
+    if (revision === logoRevision) error.value = errorMessage(cause);
+  } finally {
+    if (revision === logoRevision) {
+      logoLoading.value = false;
+      if (logoInput.value) logoInput.value.value = '';
+    }
+  }
+}
+onBeforeUnmount(() => {
+  logoRevision++;
+});
 const route = useRoute(),
   router = useRouter(),
   id = computed(() => (route.params.id ? String(route.params.id) : null)),
@@ -136,6 +164,7 @@ function move(index: number, direction: number) {
   form.fields.splice(index + direction, 0, field);
 }
 async function save() {
+  if (logoLoading.value) return;
   saving.value = true;
   error.value = '';
   try {
@@ -220,12 +249,16 @@ onMounted(load);
         <span v-if="event" class="status-pill" :class="event.state">{{
           stateLabels[event.state]
         }}</span
-        ><a-button :loading="saving" :disabled="event?.state === 'CLOSED'" @click="save"
+        ><a-button
+          :loading="saving"
+          :disabled="logoLoading || event?.state === 'CLOSED'"
+          @click="save"
           >保存{{ id ? '修改' : '草稿' }}</a-button
         ><a-button
           v-if="!event || event.state === 'DRAFT'"
           type="primary"
           :loading="saving"
+          :disabled="logoLoading"
           @click="publish"
           >发布活动 <ArrowRightOutlined /></a-button
         ><a-button v-if="event?.state === 'PUBLISHED'" @click="stateChange('PAUSED')"
@@ -324,6 +357,31 @@ onMounted(load);
                 :maxlength="2000"
                 placeholder="给参与者写一段简短的介绍或提醒"
             /></a-form-item>
+            <a-form-item
+              label="扫码签到页 Logo"
+              extra="PNG、JPEG 或 WebP，最大 2 MB；保存活动后生效"
+            >
+              <div class="logo-controls">
+                <EventBrand :logo="form.checkin_logo" :name="form.name" />
+                <a-button :loading="logoLoading" @click="logoInput?.click()">{{
+                  form.checkin_logo ? '替换图片' : '选择图片'
+                }}</a-button>
+                <a-button
+                  v-if="form.checkin_logo"
+                  :disabled="logoLoading"
+                  @click="form.checkin_logo = null"
+                  >恢复默认</a-button
+                >
+                <input
+                  ref="logoInput"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  hidden
+                  :disabled="logoLoading || loading || event?.state === 'CLOSED'"
+                  @change="selectLogo"
+                />
+              </div>
+            </a-form-item>
           </section>
           <section class="panel">
             <div class="section-number">02 / 签到方式</div>
@@ -544,6 +602,12 @@ onMounted(load);
   </div>
 </template>
 <style scoped>
+.logo-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
 .editor-layout {
   display: grid;
   align-items: start;

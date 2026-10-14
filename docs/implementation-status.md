@@ -67,6 +67,10 @@
 
 2026-10-14：按用户要求采用 Makers 中国站 GitHub main 自动部署前端、ssh b 运行 API 与 MySQL，不使用 Docker。新增仓库根目录 edgeone.json、固定目标 API 转发、严格类型与上传转发测试、systemd / Nginx 模板；源站 HTTPS 健康、登录 Cookie / Origin 链路、隔离恢复与实际 8.4 测试已验证。生产前端已在 checkin.lijie.space 上线，通过 HTTP 验证 SPA 路由刷新、静态资源、同源 API 登录与退出；修复 EdgeOne ArrayBuffer chunk 与 Node Uint8Array chunk 不同导致 POST 内容变成全零的运行时兼容问题，增加回归用例，69 项测试通过。按用户要求未使用 browser use，真机与完整线上浏览器签到链路仍待验收。详情及必要配置见 `docs/deployment.md`。
 
+## 签到提示、提前窗口与活动 Logo
+
+2026-10-14 新增签到提示、提前窗口与活动 Logo：按用户要求分成三次功能提交。范围外提示增加后端计算的边界距离；活动可在开始前 0–1440 分钟开放签到，旧活动默认 0；活动编辑页可上传、预览、替换或恢复扫码页 Logo。新增 JSON 配置迁移 004/005，在服务器独立 MySQL 8.4.5 上执行全量 78 项测试并通过；生产后端迁移、HTTPS 提前签到／Logo／幂等链路验证通过，临时数据已清理。机器检查和界面实测分开记录；按用户要求未使用 browser use，详情见 `docs/checkin-features-validation.md`。
+
 ## 自定义字段重复规则
 
 2026-10-14：移除固定身份类型与必需系统身份字段，自定义字段分别设置是否允许重复，名单匹配独立配置。已备份并执行版本化迁移，更新参与端、人工补签、导入导出与记录页。63 项测试、浏览器闭环、响应式与本机 100 次/秒测试通过；范围和限制见 `docs/custom-field-rules-validation.md`。

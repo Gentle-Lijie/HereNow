@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 import { api } from '../services/api';
 import { locale, t, publicErrorMessage } from '../services/locale';
 import EventBrand from '../components/EventBrand.vue';
+import { displayClockOffset } from '../services/display-clock';
 const props = defineProps<{ eventId: string; timerHost: Window; origin: string }>();
 const emit = defineEmits<{ title: [string] }>();
 const requests = new AbortController();
@@ -31,6 +32,7 @@ async function refresh() {
     if (!alive) return;
     name.value = info.name;
     logo.value = info.checkin_logo;
+    const requestStartedAt = Date.now();
     const result = await api<{
       token: string;
       public_id: string;
@@ -49,7 +51,7 @@ async function refresh() {
     if (!alive) return;
     qr.value = image;
     expires.value = Date.parse(result.expires_at);
-    offset.value = Date.parse(result.server_time) - Date.now();
+    offset.value = displayClockOffset(result.server_time, requestStartedAt);
     now.value = Date.now();
     error.value = '';
   } catch (cause) {

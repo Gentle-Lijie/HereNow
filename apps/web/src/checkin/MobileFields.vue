@@ -146,7 +146,9 @@ function confirm(e: { selectedValues: Array<string | number> }) {
   background: transparent;
   color: #3f483b;
   font-size: 16px;
-  min-height: 32px;
+  min-height: 44px;
+  line-height: 1.5;
+  padding: 8px 0;
   max-width: 100%;
   width: 100%;
 }

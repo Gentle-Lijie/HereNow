@@ -283,7 +283,9 @@ onBeforeUnmount(() => {
         </div>
         <div class="result-footer">
           {{
-            result.status === 'CHECKED_IN' ? '信息已记录，无需再次提交。' : '此状态不计为签到成功。'
+            result.status === 'CHECKED_IN'
+              ? '签到成功！请截图保存本次签到回执（含签到时间与回执编号）。'
+              : '此状态不计为签到成功。'
           }}
         </div>
       </section>
@@ -465,20 +467,36 @@ onBeforeUnmount(() => {
 }
 .checkin-fields :deep(.van-cell) {
   padding: 12px 16px;
+  overflow: visible;
 }
 .checkin-fields :deep(.van-field__label--top) {
   margin-bottom: 4px;
   font-size: 14px;
   font-weight: 500;
+  line-height: 1.5;
+  padding-block: 2px;
+}
+.checkin-fields :deep(.van-field__value),
+.checkin-fields :deep(.van-field__body) {
+  overflow: visible;
 }
 .checkin-fields :deep(.van-field__control) {
   font-size: 16px;
   line-height: 1.5;
   min-height: 44px;
 }
+.checkin-fields :deep(input.van-field__control),
+.checkin-fields :deep(textarea.van-field__control) {
+  height: auto;
+  padding: 8px 0;
+}
+.checkin-fields :deep(textarea.van-field__control) {
+  min-height: 72px;
+}
 .checkin-fields :deep(.van-field__control::placeholder) {
   color: #899085;
   font-size: 16px;
+  line-height: inherit;
 }
 .location-card {
   margin-top: 12px;

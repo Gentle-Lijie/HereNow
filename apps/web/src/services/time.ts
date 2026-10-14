@@ -11,6 +11,9 @@ export function toZonedInput(iso: string, timezone: string) {
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
   return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
 }
+export function formatReceiptTime(iso: string, timezone = 'Asia/Shanghai') {
+  return toZonedInput(iso, timezone).replace('T', ' ').replaceAll('-', '/');
+}
 export function fromZonedInput(value: string, timezone: string) {
   const naive = Date.parse(`${value}:00Z`);
   if (!Number.isFinite(naive)) throw new Error('请输入有效的活动时间');

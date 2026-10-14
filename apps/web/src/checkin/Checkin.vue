@@ -19,6 +19,8 @@ import {
   type CheckinInput,
 } from '../../../../packages/contracts/src/index';
 import { api, ApiError, errorMessage, formatTime } from '../services/api';
+import { formatReceiptTime } from '../services/time';
+import { receiptAnswers } from '../services/receipts';
 import EventBrand from '../components/EventBrand.vue';
 import MobileFields from './MobileFields.vue';
 const publicId = String(useRoute().params.publicId),
@@ -53,6 +55,11 @@ const publicId = String(useRoute().params.publicId),
 let timer: ReturnType<typeof setInterval> | undefined;
 let alive = true;
 let submitted: { key: string; body: CheckinInput } | undefined;
+const savedAnswerRows = computed(() =>
+  result.value && publicSession.value
+    ? receiptAnswers(publicSession.value.event.fields, result.value.answers)
+    : [],
+);
 const draft = () => {
   sessionStorage.setItem(
     draftKey,
@@ -262,6 +269,9 @@ onBeforeUnmount(() => {
           ><span v-else>{{ result.status === 'PENDING_REVIEW' ? '…' : '!' }}</span>
         </div>
         <h1>{{ checkinLabels[result.status] }}</h1>
+        <p v-if="result.status === 'CHECKED_IN'" class="receipt-save-notice" role="status">
+          请截图保存本页，作为本次签到成功凭证。内容较长时可使用长截图。
+        </p>
         <p v-if="result.status !== 'CHECKED_IN'">
           {{
             result.status === 'PENDING_REVIEW'
@@ -275,17 +285,26 @@ onBeforeUnmount(() => {
           </div>
           <div>
             <span>签到时间</span
-            ><strong>{{ formatTime(result.checked_in_at, publicSession?.event.timezone) }}</strong>
+            ><strong>{{
+              formatReceiptTime(result.checked_in_at, publicSession?.event.timezone)
+            }}</strong>
           </div>
           <div>
             <span>回执</span><strong class="receipt-id">{{ result.receipt_id }}</strong>
           </div>
         </div>
+        <section v-if="savedAnswerRows.length" class="receipt-answers">
+          <h2>填写信息</h2>
+          <dl>
+            <div v-for="row in savedAnswerRows" :key="row.key">
+              <dt>{{ row.label }}</dt>
+              <dd>{{ row.value }}</dd>
+            </div>
+          </dl>
+        </section>
         <div class="result-footer">
           {{
-            result.status === 'CHECKED_IN'
-              ? '签到成功！请截图保存本次签到回执（含签到时间与回执编号）。'
-              : '此状态不计为签到成功。'
+            result.status === 'CHECKED_IN' ? '信息已记录，无需再次提交。' : '此状态不计为签到成功。'
           }}
         </div>
       </section>
@@ -611,6 +630,48 @@ onBeforeUnmount(() => {
 .result-card > p {
   font-size: 14px;
   color: var(--muted);
+}
+.result-card > .receipt-save-notice {
+  margin: 12px 0 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--green);
+  text-align: left;
+  line-height: 1.6;
+}
+.receipt-answers {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-align: left;
+}
+.receipt-answers h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.receipt-answers dl {
+  margin: 0;
+}
+.receipt-answers dl > div + div {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.receipt-answers dt {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.receipt-answers dd {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .receipt-details {
   margin: 16px 0;

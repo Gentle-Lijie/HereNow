@@ -1,4 +1,4 @@
-import type { Field, Answer } from '../../../../packages/contracts/src/index';
+import type { Field, Answer } from '../../../../packages/contracts/src/index.js';
 export function formatAnswer(field: Field | undefined, value: Answer | undefined): string {
   if (value === undefined || value === '') return '—';
   if (typeof value === 'boolean') return value ? '是' : '否';

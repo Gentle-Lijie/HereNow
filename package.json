@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "npm@10.9.2",
   "engines": {
     "node": ">=22"
   },
@@ -15,10 +16,11 @@
     "setup": "tsx scripts/setup.ts",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
-    "typecheck": "vue-tsc --noEmit -p apps/web/tsconfig.json && tsc --noEmit -p apps/api/tsconfig.json",
+    "typecheck": "vue-tsc --noEmit -p apps/web/tsconfig.json && tsc --noEmit -p apps/api/tsconfig.json && tsc -p edge-functions/tsconfig.json",
     "lint": "eslint .",
     "test": "vitest run",
     "build": "npm run typecheck && npm run build -w @herenow/web && npm run build -w @herenow/api",
+    "build:frontend": "vue-tsc --noEmit -p apps/web/tsconfig.json && tsc -p edge-functions/tsconfig.json && npm run build -w @herenow/web",
     "start": "node apps/api/dist/apps/api/src/server.js",
     "cleanup": "tsx scripts/cleanup.ts",
     "backup": "tsx scripts/backup.ts",

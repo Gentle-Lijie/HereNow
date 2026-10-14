@@ -92,6 +92,8 @@ npm run test:load
 
 ## 本机构建运行与运维
 
+生产环境采用 EdgeOne Makers GitHub 自动部署 Vue 前端，`ssh b` 运行 API 和 MySQL 8.4，通过同源转发保留 Cookie 与安全校验。控制台填写项、DNS、服务管理与实际状态见 [生产部署](docs/deployment.md)。
+
 ```sh
 npm run build
 npm start

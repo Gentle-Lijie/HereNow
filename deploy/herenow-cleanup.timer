@@ -1,0 +1,11 @@
+[Unit]
+Description=HereNow hourly retention schedule
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=60
+Unit=herenow-cleanup.service
+
+[Install]
+WantedBy=timers.target

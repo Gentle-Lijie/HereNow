@@ -1,0 +1,23 @@
+[Unit]
+Description=HereNow check-in API
+After=network.target mysql.service mysqld.service
+
+[Service]
+Type=simple
+User=herenow
+Group=herenow
+WorkingDirectory=/srv/herenow/current
+Environment=PATH=/www/server/mysql/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/etc/herenow/backend.env
+ExecStart=/usr/local/bin/node apps/api/dist/apps/api/src/server.js
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/herenow/shared
+
+[Install]
+WantedBy=multi-user.target

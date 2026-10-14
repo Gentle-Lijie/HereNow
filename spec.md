@@ -403,6 +403,8 @@ IP 共享非常常见：默认不按“一个 IP 只能一人”限制。IP 用�
 
 前端构建结果由同一个应用或反向代理提供，页面与 API 同源；逻辑上分层，不要求分别部署。前端遵循已确认的 Vue 框架；其他推荐技术可按团队与部署环境调整，核心安全规则和数据库约束不变。
 
+2026-10-14 部署选择已由用户确认：前端在 EdgeOne Makers 中国站通过 GitHub `Gentle-Lijie/HereNow` 的 `main` 分支自动部署，域名 `checkin.lijie.space`；业务后端和本机 MySQL 8.4 位于 `ssh b`，HTTPS API 域名 `checkin-api.lijie.space`，不使用 Docker。浏览器仍请求前端同源 `/api/*`，Makers Edge Function 仅作固定目标的 HTTPS 转发，不承载业务逻辑或数据库连接。转发保留原始请求体、幂等键、Cookie 和 Origin，以服务端 `API_PROXY_SECRET` 认证；可信客户端 IP 仅从 EdgeOne `request.eo.clientIp` 获取，Nginx 验证转发密钥后覆盖转发头，源站业务接口拒绝绕过转发访问。域名、构建、密钥注入与实测状态见 `docs/deployment.md`。
+
 不默认引入 Redis、消息队列、对象存储、微服务和独立实时推送服务。上传文件只作临时解析，导入完成后删除；不支持附件，因而不需要长期文件仓库。
 
 纯浏览器／纯静态站无法安全保护签名密钥、白名单和并发去重；必须有后端。SQLite 可服务单机临时工具，但首期推荐 MySQL + InnoDB，方便事务、备份和以后多实例部署。PostgreSQL 同样可行，首期需求不足以要求依赖它的专有能力。Serverless 也可实现，但要额外处理连接、冷启动、限速和数据库事务，不作为默认方案。

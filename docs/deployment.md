@@ -20,7 +20,7 @@
 | 生产分支       | `main`                                                             |
 | Git 自动部署   | 开启，生产部署由 main 的提交触发                                   |
 | 框架           | Vue / Vite；若预设改动根目录，选择 Other 并使用以下自定义值        |
-| 根目录         | 仓库根目录 `/`，不能选 `apps/web`                                  |
+| 根目录         | 默认仓库根目录（留空），不能填 `apps/web` 或 `apps/web/dist`       |
 | 安装命令       | `npm ci --no-audit --no-fund`                                      |
 | 构建命令       | `npx --yes --package=node@22.14.0 --call "npm run build:frontend"` |
 | 输出目录       | `apps/web/dist`                                                    |
@@ -42,10 +42,10 @@
 
 ## DNS
 
-| 主机记录      | 类型  | 记录值                                                  | TTL |
-| ------------- | ----- | ------------------------------------------------------- | --- |
-| `checkin-api` | A     | `106.12.60.181`                                         | 600 |
-| `checkin`     | CNAME | Makers 添加自定义域名后实际返回的目标，不能按项目名猜测 | 600 |
+| 主机记录      | 类型  | 记录值                                                        | TTL |
+| ------------- | ----- | ------------------------------------------------------------- | --- |
+| `checkin-api` | A     | `106.12.60.181`                                               | 600 |
+| `checkin`     | CNAME | `checkin.lijie.space.pages.dnsoe6.com`（已通过公网 DNS 核对） | 600 |
 
 记录使用 DNS-only，不套其他代理。添加前端域名时如控制台返回 TXT / 其他验证记录，按实际完整名称与值创建。后端使用服务器现有 `*.lijie.space` 通配证书，证书由现有管理流程续期；本项目不覆盖证书或修改其他站点。
 
@@ -72,12 +72,12 @@ curl --fail https://checkin-api.lijie.space/api/health
 
 ## 验证状态
 
-2026-10-14 线上转发修复：实际 HTTPS 探针确认原 POST 的字节数保持，但内容被错误复制为全零，导致 JSON 登录请求返回 INVALID_REQUEST 400。EdgeOne reader 的 chunk 支持 ArrayBuffer，与 Node 的 Uint8Array 返回值不同；转发先在运行时规范化 ArrayBuffer / ArrayBufferView，再按原始字节复制，明确使用 ArrayBuffer 与准确 Content-Length 发送。增加真实平台 chunk 形态的回归测试，保留 6 MB 上限和幂等原请求；生产链路在 Git 自动部署后复验。诊断只使用无凭证测试内容，临时诊断路由完成后已移除。
+2026-10-14 线上转发修复：实际 HTTPS 探针确认原 POST 的字节数保持，但内容被错误复制为全零，导致 JSON 登录请求返回 INVALID_REQUEST 400。EdgeOne reader 的 chunk 支持 ArrayBuffer，与 Node 的 Uint8Array 返回值不同；转发先在运行时规范化 ArrayBuffer / ArrayBufferView，再按原始字节复制，明确使用 ArrayBuffer 与准确 Content-Length 发送。增加真实平台 chunk 形态的回归测试，保留 6 MB 上限和幂等原请求；Git 自动部署后，实际生产前端域名的 context、正确密码登录、退出均返回 200；过长密码返回明确 INVALID_FORM 长度错误。类型、lint、构建、格式检查和 69 项测试通过。诊断只使用无凭证测试内容，临时诊断路由完成后已移除。
 
-- 本地类型检查、lint、格式检查、68 项测试通过；包含固定目标转发、Cookie / CSRF / 幂等传递、IP 伪造头剥离与密钥缺失拒绝，以及超过 1 MB 的名单请求按原始字节转发、超过 6 MB 的上传拒绝。EdgeOne 请求便捷读取方法有 1 MB 限制，转发使用有上限的 ReadableStream 读取。
+- 本地类型检查、lint、格式检查、69 项测试通过；包含固定目标转发、Cookie / CSRF / 幂等传递、IP 伪造头剥离与密钥缺失拒绝，以及超过 1 MB 的名单请求按原始字节转发、超过 6 MB 的上传拒绝。EdgeOne 请求便捷读取方法有 1 MB 限制，转发使用有上限的 ReadableStream 读取。
 - 已用锁定 Node 22.14.0 执行实际 Makers 前端构建命令，产物根目录有 index.html，后端 TypeScript 编译通过。
 - 后端版本化迁移、生产管理员初始化、systemd API 与定时任务启用完成；HTTPS 健康接口返回 OK，直接访问源站业务 API 与外部 OPTIONS 返回 403。以实际转发代码连接 HTTPS 源站，验证 Cookie 安全标记、生产管理员登录、鉴权请求、Origin 拒绝和退出通过，没有创建演示活动。
 - MySQL 8.4.5 的独立 herenow_test 上，65 项测试以业务账号通过；故障注入测试因开启 binlog 而要求管理员创建触发器，单独以测试管理员执行并通过，没有提升生产业务账号的全局权限或改变 MySQL 全局配置。临时测试库和触发器已经清理。新增的两项上传转发测试不依赖数据库。
 - 实际备份与清理 oneshot 均成功；备份恢复到隔离随机库，验证 17 张表、1 个管理员后删除临时库。参与入口与静态依赖 JS gzip 约 110 KB，通过 250 KB 构建预算，不能替代手机网络和生产负载实测。
-- Makers Git 导入、自定义域名、运行时环境变量由用户在后台填写；拿到真实项目 / 部署 URL 后再验证首页、嵌套路由刷新、静态资源、API、登录、动态码和签到链路，当前不能称前端已部署。
+- Makers Git 导入、自定义域名和运行时环境变量已由用户在后台配置。实际项目 makers-wlj9fuksayis；生产地址 https://checkin.lijie.space，Git 自动部署修复已在线生效。通过 HTTP 验证首页、/login、/admin/events/new、/s/deployment-route-probe 返回 SPA；入口 JS / CSS 返回正确内容类型；同源 API 健康、context、登录和退出通过。按用户要求未使用 browser use；线上界面点击、真机扫码、动态码与完整签到浏览器链路仍需实际验收。
 - 手机真机扫码 / 定位、生产混合负载、现场围栏、域名下高德授权、外部告警与异地备份仍待验证。

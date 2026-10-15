@@ -10,6 +10,7 @@ export async function cleanup() {
     'import_jobs',
     'display_sessions',
     'admin_sessions',
+    'webauthn_challenges',
   ])
     await execute(db, `DELETE FROM ${table} WHERE expires_at<UTC_TIMESTAMP(3)`);
   await execute(

@@ -9,6 +9,7 @@ import { api, session } from '../services/api';
 const router = useRouter(),
   route = useRoute();
 const creating = computed(() => route.path === '/admin/events/new');
+const security = computed(() => route.path === '/admin/security');
 async function logout() {
   await api('/admin/logout', { method: 'POST' });
   session.user = null;
@@ -37,7 +38,7 @@ async function logout() {
             <Brand small />
           </RouterLink>
           <nav class="admin-nav" aria-label="后台导航">
-            <RouterLink to="/admin" :class="{ active: !creating }">
+            <RouterLink to="/admin" :class="{ active: !creating && !security }">
               <AppstoreOutlined />活动工作台
             </RouterLink>
             <RouterLink
@@ -49,6 +50,9 @@ async function logout() {
             </RouterLink>
           </nav>
           <div class="header-account">
+            <RouterLink to="/admin/security" class="security-link" :class="{ active: security }"
+              >账号安全</RouterLink
+            >
             <span class="account-name" :title="session.user?.username">
               {{ session.user?.username }}
             </span>
@@ -96,6 +100,7 @@ async function logout() {
   gap: 4px;
 }
 .admin-nav a,
+.security-link,
 .logout-button {
   display: inline-flex;
   align-items: center;
@@ -109,11 +114,13 @@ async function logout() {
   white-space: nowrap;
 }
 .admin-nav a:hover,
+.security-link:hover,
 .logout-button:hover {
   background: #f7f7f5;
   color: #2b302d;
 }
-.admin-nav a.active {
+.admin-nav a.active,
+.security-link.active {
   background: #fff3ee;
   color: var(--accent);
   font-weight: 600;
@@ -146,6 +153,7 @@ async function logout() {
 }
 .header-brand:focus-visible,
 .admin-nav a:focus-visible,
+.security-link:focus-visible,
 .logout-button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue';
+import { onBeforeUnmount, reactive, ref } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import {
   Button as AButton,
@@ -11,21 +11,55 @@ import {
 } from 'ant-design-vue';
 import Brand from '../components/Brand.vue';
 import { api, loadContext, errorMessage } from '../services/api';
+import {
+  cancelPasskey,
+  loginWithPasskey,
+  passkeyError,
+  passkeysSupported,
+} from '../services/account-security';
 const form = reactive({ username: '', password: '' }),
   busy = ref(false),
   error = ref(''),
   router = useRouter(),
   route = useRoute();
+const supported = passkeysSupported();
+const controller = new AbortController();
+const passkeyBusy = ref(false);
+async function finishLogin() {
+  if (controller.signal.aborted) return;
+  await loadContext(true);
+  if (controller.signal.aborted) return;
+  const redirect = String(route.query.redirect ?? '/admin');
+  await router.replace(redirect.startsWith('/admin') ? redirect : '/admin');
+}
+async function passkeyLogin() {
+  if (busy.value || passkeyBusy.value) return;
+  passkeyBusy.value = true;
+  error.value = '';
+  try {
+    await loginWithPasskey(controller.signal);
+    await finishLogin();
+  } catch (e) {
+    if (!controller.signal.aborted) error.value = passkeyError(e);
+  } finally {
+    if (!controller.signal.aborted) passkeyBusy.value = false;
+  }
+}
+onBeforeUnmount(() => {
+  controller.abort();
+  cancelPasskey();
+  form.password = '';
+});
 async function login() {
+  if (busy.value || passkeyBusy.value) return;
   busy.value = true;
   error.value = '';
   try {
-    await api('/admin/login', { method: 'POST', body: form });
-    await loadContext(true);
-    const redirect = String(route.query.redirect ?? '/admin');
-    await router.replace(redirect.startsWith('/admin') ? redirect : '/admin');
+    await api('/admin/login', { method: 'POST', body: form, signal: controller.signal });
+    form.password = '';
+    await finishLogin();
   } catch (e) {
-    error.value = errorMessage(e);
+    if (!controller.signal.aborted) error.value = errorMessage(e);
   } finally {
     busy.value = false;
   }
@@ -39,8 +73,11 @@ async function login() {
         <div class="login-card">
           <Brand />
           <h1>登录工作台</h1>
+          <p v-if="route.query.password_changed === '1'" role="status">
+            密码已修改，请使用新密码或 Passkey 重新登录。
+          </p>
           <div v-if="error" role="alert" class="error-banner">{{ error }}</div>
-          <a-form layout="vertical" :model="form" @finish="login"
+          <a-form layout="vertical" :model="form" :disabled="busy || passkeyBusy" @finish="login"
             ><a-form-item
               label="账号"
               name="username"
@@ -61,6 +98,14 @@ async function login() {
               >登录</a-button
             ></a-form
           >
+          <a-button
+            block
+            :disabled="!supported || busy || passkeyBusy"
+            :loading="passkeyBusy"
+            @click="passkeyLogin"
+            >使用 Passkey 登录</a-button
+          >
+          <p v-if="!supported" class="login-footnote">此浏览器暂不支持 Passkey，请使用密码登录。</p>
           <div class="login-footnote">参与活动？请扫描现场展示的活动二维码。</div>
         </div>
       </main>

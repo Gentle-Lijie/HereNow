@@ -14,6 +14,7 @@ const router = createRouter({
       meta: { admin: true },
       children: [
         { path: '', component: () => import('../admin/Dashboard.vue') },
+        { path: 'security', component: () => import('../admin/Security.vue') },
         { path: 'events/new', component: () => import('../admin/EventEditor.vue') },
         { path: 'events/:id', component: () => import('../admin/EventEditor.vue') },
         { path: 'events/:id/roster', component: () => import('../admin/Roster.vue') },

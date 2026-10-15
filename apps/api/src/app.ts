@@ -6,7 +6,9 @@ import rateLimit from '@fastify/rate-limit';
 import staticFiles from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { hash, verify } from '@node-rs/argon2';
+import { hash } from '@node-rs/argon2';
+import { passwordLogin } from './services/authentication.js';
+import { accountSecurityRoutes } from './routes/account-security.js';
 import { z } from 'zod';
 import {
   eventInputSchema,
@@ -96,7 +98,7 @@ const cookieOptions = {
 };
 export async function buildApp() {
   const [migration] = await rows(db, 'SELECT name FROM schema_migrations WHERE name=?', [
-    '003_custom_fields.ts',
+    '007_account_security.sql',
   ]);
   if (!migration) throw new Error('数据库需要更新，请先运行 npm run db:migrate');
   const app = Fastify({
@@ -206,15 +208,7 @@ export async function buildApp() {
         z.object({ username: z.string().max(80), password: z.string().max(200) }).strict(),
         r,
       );
-      const [u] = await rows<User>(db, 'SELECT * FROM users WHERE username=?', [input.username]);
-      if (!u?.password_hash || !(await verify(u.password_hash, input.password)))
-        fail('LOGIN_FAILED', '账号或密码不正确', 401);
-      const token = randomToken();
-      await execute(
-        db,
-        'INSERT INTO admin_sessions(token_digest,user_id,expires_at) VALUES (?,?,DATE_ADD(UTC_TIMESTAMP(3),INTERVAL 12 HOUR))',
-        [digest(token), u!.id],
-      );
+      const { token, user: u } = await passwordLogin(input.username, input.password);
       reply.setCookie('hn_admin', token, { ...cookieOptions, maxAge: 43200 });
       return { code: 'OK', user: { id: String(u!.id), username: u!.username, role: u!.role } };
     },
@@ -227,6 +221,7 @@ export async function buildApp() {
     reply.clearCookie('hn_admin', cookieOptions);
     return { code: 'OK' };
   });
+  accountSecurityRoutes(app);
   app.get('/api/admin/events', async (r) => {
     const u = requiredUser(r);
     const list = await rows<EventRow>(

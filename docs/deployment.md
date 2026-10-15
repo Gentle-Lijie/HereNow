@@ -118,3 +118,7 @@ curl --fail https://checkin-api.lijie.space/api/health
 本次密码修改与 Passkey 功能需要迁移 007。按既有流程先备份，再安装固定依赖、运行 `npm run db:migrate`、构建并重启 API，最后更新前端；API 启动要求迁移 007 已登记。生产已于 2026-10-15 备份后执行迁移 007 并更新 API，功能提交为 `bf43c57`。PM2 单进程 online，重启次数仅增加本次计划重启的 1 次；GitHub main 推送后 Makers 新前端已在生产域名生效。
 
 WebAuthn 使用浏览器同源地址：`APP_ORIGIN=https://checkin.lijie.space`，RP ID 自动取 `checkin.lijie.space`，不使用 API 源站域名。完整 Origin 必须精确匹配，不含尾斜线或路径；测试临时域名或 localhost 上创建的 Passkey 不能用于生产主机名。每账号最多 10 个凭证，操作系统执行用户验证；不支持 Passkey 的浏览器保留密码登录。新增表随数据库备份，过期认证挑战由常规 cleanup 删除。服务器实际 Node 22.14.0 / MySQL 8.4.5 隔离库的全量 118 项测试通过；生产域名的临时管理员改密、Passkey 注册／登录／删除及密码回退闭环通过，临时账号与测试库已清理。现有管理员密码未改动。真实设备验证仍待完成，详见 `docs/account-security-validation.md`。
+
+## 2026-10-15 密码规则与账号页面修复
+
+功能提交 `cb4a38a` 已部署：密码取消长度／字符组合及新旧不同限制，保留非空和确认一致；修复账号安全双栏响应式布局、错误间距和登录按钮间距。生产备份后更新 API 并由 PM2 重启；锁文件和数据库结构未变，无需安装新依赖或执行迁移。GitHub main 推送后 Makers 新资产已生效。实际 MySQL 8.4.5 的 124 项测试及线上临时管理员的六位密码、复用原密码、Passkey 全流程和布局检查通过。临时账号与测试库已清理，既有管理员密码不变。

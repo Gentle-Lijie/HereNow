@@ -3,8 +3,8 @@ node_modules/
 .env.*
 !.env.example
 apps/*/dist/
-output/
+/output
 .playwright-cli/
 *.log
 .DS_Store
-.local/
+/.local

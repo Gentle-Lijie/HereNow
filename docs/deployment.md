@@ -110,3 +110,5 @@ curl --fail https://checkin-api.lijie.space/api/health
 - 实际备份与清理 oneshot 均成功；备份恢复到隔离随机库，验证 17 张表、1 个管理员后删除临时库。参与入口与静态依赖 JS gzip 约 110 KB，通过 250 KB 构建预算，不能替代手机网络和生产负载实测。
 - Makers Git 导入、自定义域名和运行时环境变量已由用户在后台配置。实际项目 makers-wlj9fuksayis；生产地址 https://checkin.lijie.space，Git 自动部署修复已在线生效。通过 HTTP 验证首页、/login、/admin/events/new、/s/deployment-route-probe 返回 SPA；入口 JS / CSS 返回正确内容类型；同源 API 健康、context、登录和退出通过。按用户要求未使用 browser use；线上界面点击、真机扫码、动态码与完整签到浏览器链路仍需实际验收。
 - 手机真机扫码 / 定位、生产混合负载、现场围栏、域名下高德授权、外部告警与异地备份仍待验证。
+
+2026-10-15 PM2 迁移实测：`/root/HereNow` 通过 Git SSH 克隆，锁定依赖安装和 API 编译通过；切换前备份完成。实际 PM2 cwd 和脚本均位于 `/root/HereNow`，进程 online、无重启；旧 API unit inactive / disabled，`pm2-root` 和原备份／清理 timers 保持 enabled，新的两个 oneshot 均 Result=success / ExecMainStatus=0。源站和 Makers 同源 `/api/health` 返回 OK；Makers 自动部署产物已包含原因选填改动。未通过重启整台服务器验证开机恢复，以已启用 unit 与 PM2 保存列表为检查范围。

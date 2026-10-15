@@ -3,11 +3,12 @@ import { z } from 'zod';
 import { rows, execute, transaction } from '../db.js';
 import { audit } from './events.js';
 import { fail } from './security.js';
+import { passwordSchema } from '../../../../packages/contracts/src/account-security.js';
 
 /** Explicit deployment action: changing bootstrap configuration alone never overwrites accounts. */
 export async function resetAdminPassword(username: string, password: string) {
   const input = z
-    .object({ username: z.string().min(1).max(80), password: z.string().min(1).max(200) })
+    .object({ username: z.string().min(1).max(80), password: passwordSchema })
     .parse({ username, password });
   // Keep the expensive hash operation outside the database transaction.
   const passwordHash = await hash(input.password, {

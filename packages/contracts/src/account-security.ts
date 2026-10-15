@@ -1,10 +1,11 @@
 import { z } from 'zod';
 
-export const currentPasswordSchema = z.string().min(1, '请输入当前密码').max(200);
+export const passwordSchema = z.string().min(1, '请输入密码');
+export const currentPasswordSchema = z.string().min(1, '请输入当前密码');
 export const changePasswordSchema = z
   .object({
     current_password: currentPasswordSchema,
-    new_password: z.string().min(12, '新密码至少 12 个字符').max(200, '新密码最多 200 个字符'),
+    new_password: z.string().min(1, '请输入新密码'),
   })
   .strict();
 export const passkeyRegistrationSchema = z

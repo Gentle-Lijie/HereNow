@@ -113,7 +113,7 @@ IP 默认取 socket，不信任任意 `X-Forwarded-For`。只有实际经过可�
 
 ## 账号与活动授权
 
-管理员账号由部署方创建，无公开注册。创建操作员使用部署环境变量 `NEW_USER_NAME`、`NEW_USER_PASSWORD`、`NEW_USER_ROLE=operator`、`NEW_USER_EVENTS=活动ID,活动ID` 后运行 `npm run user:create`。密码至少 12 字符；输入秘密应使用本地环境配置，避免写入 shell 历史或 Git。操作员只访问被授予的活动，默认无法导出或查看完整名单。
+管理员账号由部署方创建，无公开注册。创建操作员使用部署环境变量 `NEW_USER_NAME`、`NEW_USER_PASSWORD`、`NEW_USER_ROLE=operator`、`NEW_USER_EVENTS=活动ID,活动ID` 后运行 `npm run user:create`。密码非空即可，无长度和字符组合要求；输入秘密应使用本地环境配置，避免写入 shell 历史或 Git。操作员只访问被授予的活动，默认无法导出或查看完整名单。
 
 ## 文档
 

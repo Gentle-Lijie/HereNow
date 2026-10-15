@@ -205,15 +205,7 @@ describe('account security with real MySQL and WebAuthn signatures', () => {
       (
         await client.call('POST', '/api/admin/password', {
           current_password: user.password,
-          new_password: 'short',
-        })
-      ).statusCode,
-    ).toBe(400);
-    expect(
-      (
-        await client.call('POST', '/api/admin/password', {
-          current_password: user.password,
-          new_password: user.password,
+          new_password: '',
         })
       ).statusCode,
     ).toBe(400);
@@ -241,6 +233,41 @@ describe('account security with real MySQL and WebAuthn signatures', () => {
     expect((await otherAccount.client.call('GET', '/api/context')).json().user.id).toBe(
       otherAccount.user.id,
     );
+  });
+  it.each(['1', '123456', '中文', '   ', 'p'.repeat(512)])(
+    'accepts arbitrary nonempty password %# for change and login',
+    async (password) => {
+      const { user, client } = await account();
+      expect(
+        (
+          await client.call('POST', '/api/admin/password', {
+            current_password: user.password,
+            new_password: password,
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect((await client.login(user.username, password)).statusCode).toBe(200);
+      expect(
+        (
+          await client.call('POST', '/api/admin/passkeys/register/options', {
+            current_password: password,
+          })
+        ).statusCode,
+      ).toBe(200);
+    },
+  );
+  it('accepts reusing the current password while still revoking old sessions', async () => {
+    const { user, client } = await account();
+    expect(
+      (
+        await client.call('POST', '/api/admin/password', {
+          current_password: user.password,
+          new_password: user.password,
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect((await client.call('GET', '/api/context')).json().user).toBeNull();
+    expect((await client.login(user.username, user.password)).statusCode).toBe(200);
   });
   it('serializes competing password changes and rejects stale session mutations', async () => {
     const { user, client } = await account();

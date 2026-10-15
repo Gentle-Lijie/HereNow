@@ -1,8 +1,9 @@
 import { hash } from '@node-rs/argon2';
 import { db, execute, transaction } from '../apps/api/src/db.js';
 import { z } from 'zod';
+import { passwordSchema } from '../packages/contracts/src/account-security.js';
 const username = z.string().min(1).max(80).parse(process.env.NEW_USER_NAME),
-  password = z.string().min(12).parse(process.env.NEW_USER_PASSWORD),
+  password = passwordSchema.parse(process.env.NEW_USER_PASSWORD),
   role = z.enum(['admin', 'operator']).parse(process.env.NEW_USER_ROLE ?? 'operator');
 const eventIds = (process.env.NEW_USER_EVENTS ?? '')
   .split(',')

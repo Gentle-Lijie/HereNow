@@ -65,7 +65,6 @@ export async function changePassword(
   newPassword: string,
 ) {
   const snapshot = await checkPassword(userId, currentPassword);
-  if (currentPassword === newPassword) fail('PASSWORD_UNCHANGED', '新密码不能与当前密码相同');
   const passwordHash = await hashPassword(newPassword);
   await transaction(async (sql) => {
     const user = await lockAccount(sql, userId);

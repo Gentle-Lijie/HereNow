@@ -93,17 +93,18 @@ async function login() {
               ><a-input-password
                 v-model:value="form.password"
                 autocomplete="current-password"
-                placeholder="输入登录密码" /></a-form-item
-            ><a-button type="primary" html-type="submit" block :loading="busy"
-              >登录</a-button
-            ></a-form
-          >
-          <a-button
-            block
-            :disabled="!supported || busy || passkeyBusy"
-            :loading="passkeyBusy"
-            @click="passkeyLogin"
-            >使用 Passkey 登录</a-button
+                placeholder="输入登录密码"
+            /></a-form-item>
+            <div class="login-actions">
+              <a-button type="primary" html-type="submit" block :loading="busy">登录</a-button>
+              <a-button
+                block
+                :disabled="!supported || busy || passkeyBusy"
+                :loading="passkeyBusy"
+                @click="passkeyLogin"
+                >使用 Passkey 登录</a-button
+              >
+            </div></a-form
           >
           <p v-if="!supported" class="login-footnote">此浏览器暂不支持 Passkey，请使用密码登录。</p>
           <div class="login-footnote">参与活动？请扫描现场展示的活动二维码。</div>
@@ -132,5 +133,16 @@ async function login() {
   font-size: 12px;
   line-height: 1.6;
   color: var(--muted);
+}
+.login-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.login-card :deep(.ant-form-item-with-help) {
+  padding-bottom: 8px;
+}
+.login-card :deep(.ant-form-item-explain) {
+  overflow: hidden;
 }
 </style>

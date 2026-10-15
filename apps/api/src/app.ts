@@ -9,6 +9,7 @@ import { resolve } from 'node:path';
 import { hash } from '@node-rs/argon2';
 import { passwordLogin } from './services/authentication.js';
 import { accountSecurityRoutes } from './routes/account-security.js';
+import { passwordSchema } from '../../../packages/contracts/src/account-security.js';
 import { z } from 'zod';
 import {
   eventInputSchema,
@@ -205,7 +206,7 @@ export async function buildApp() {
     { config: { rateLimit: { max: 10, timeWindow: 60000 } } },
     async (r, reply) => {
       const input = body(
-        z.object({ username: z.string().max(80), password: z.string().max(200) }).strict(),
+        z.object({ username: z.string().max(80), password: passwordSchema }).strict(),
         r,
       );
       const { token, user: u } = await passwordLogin(input.username, input.password);
@@ -911,6 +912,10 @@ export async function ensureAdmin() {
   if (!exists)
     await execute(db, "INSERT INTO users(username,password_hash,role) VALUES (?,?,'admin')", [
       config.ADMIN_USERNAME,
-      await hash(config.ADMIN_PASSWORD, { memoryCost: 19456, timeCost: 2, parallelism: 1 }),
+      await hash(passwordSchema.parse(config.ADMIN_PASSWORD), {
+        memoryCost: 19456,
+        timeCost: 2,
+        parallelism: 1,
+      }),
     ]);
 }

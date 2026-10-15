@@ -27,7 +27,7 @@
 | 校验      | 共享业务 schema 与运行时校验；初始化时选择一种成熟方案                                             |
 | 数据库    | MySQL 8.4 LTS、InnoDB、utf8mb4                                                                     |
 | 地图      | 中国大陆为当前选型假设，高德 JS API 2.0；转换模块与服务商解耦                                      |
-| 部署      | Makers GitHub 自动构建 Vue；ssh b 单应用进程 + 本机 MySQL 8.4；Makers 转发 `/api/*` 保持浏览器同源 |
+| 部署      | Makers GitHub 自动构建 Vue；ssh b 家目录克隆仓库 + 根目录 PM2 单进程 + 本机 MySQL 8.4；Makers 转发 `/api/*` 保持浏览器同源 |
 
 建议采用单仓库 workspace，初始化时确认 npm 或 pnpm 并只提交对应的一份锁文件。依赖锁定具体版本，不用浮动 `latest` 作为可复现构建依据。数据库访问库、CSV／XLSX 库、签名库在初始化阶段按维护性、许可和实际功能选择；不提前强制某个 ORM。不默认引入 Redis、消息队列、微服务、图表库或完整管理框架。
 
@@ -59,7 +59,7 @@ docs/                       # 规范、运行说明与验收证据
 
 导入方向：web／api 可引用 contracts；contracts 不引用 Vue、Fastify、数据库或服务器密钥。路由处理请求与响应，service 执行业务，repository 执行 SQL；UI 不直连数据库。
 
-生产构建配置见仓库根目录 `edgeone.json`，构建根目录必须为仓库根目录，产物为 `apps/web/dist`。构建运行时锁定 Node 22.14.0、包管理器 npm 10.9.2。Makers 默认预装 Node 22.11.0 低于 Vite 7 的 22.12 最低要求，因此构建命令显式调用固定 Node 22.14.0。`edge-functions/api/[[path]].ts` 仅转发 API，严格类型检查和转发安全测试并入常规检查；服务端秘密不得使用 `VITE_` 前缀。生产配置、systemd 和 Nginx 模板见 `deploy/` 和 `docs/deployment.md`。
+生产构建配置见仓库根目录 `edgeone.json`，构建根目录必须为仓库根目录，产物为 `apps/web/dist`。构建运行时锁定 Node 22.14.0、包管理器 npm 10.9.2。Makers 默认预装 Node 22.11.0 低于 Vite 7 的 22.12 最低要求，因此构建命令显式调用固定 Node 22.14.0。`edge-functions/api/[[path]].ts` 仅转发 API，严格类型检查和转发安全测试并入常规检查；服务端秘密不得使用 `VITE_` 前缀。生产配置、PM2、运维 systemd 和 Nginx 模板见 `deploy/` 和 `docs/deployment.md`。
 
 ## 3. Vue 与界面规范
 
@@ -95,6 +95,7 @@ docs/                       # 规范、运行说明与验收证据
 ## 4. API、校验与身份
 
 - API 路径、响应码和业务含义遵循 Spec 第 12 节；统一包含 `code`、`message`、`request_id`，响应成功状态与 HTTP 状态保持一致，列表限制分页与排序参数。
+- 人工补签、核验、撤销和恢复的处理原因非必填；API 允许省略或空白，去首尾空白后最多 500 字，省略存空字符串。无原因时仍在事务内保存操作员、动作、活动与时间的审计记录。
 - 所有边界输入运行时校验。字段必填、类型、选项、长度及未知字段在后端验证；客户端错误用于改善体验。
 
 - 字段 label／label_en 都必填，eventInputSchema 用于新建／更新校验，发布再次检查英文名；eventConfigSchema 仅用于读历史配置和编辑草稿。迁移 006 在活动行锁事务中补空英文名称并保留 BIGINT 字符串，不伪造翻译，不改答案和 policy_epoch。旧活动可运行但修改／发布须补齐双语标签。

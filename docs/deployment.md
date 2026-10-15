@@ -1,6 +1,6 @@
 # 生产部署
 
-日期：2026-10-14。用户指定 EdgeOne Makers 中国站 GitHub 自动部署前端，`ssh b` 运行后端；不使用 Docker。部署与完整产品验收分开记录，真机与生产负载目标仍需实测。
+日期：2026-10-15。用户指定 EdgeOne Makers 中国站 GitHub 自动部署前端，`ssh b` 运行后端；不使用 Docker。部署与完整产品验收分开记录，真机与生产负载目标仍需实测。
 
 ## 架构与域名
 
@@ -51,11 +51,38 @@
 
 ## 服务与运维
 
-当前发布目录 `/srv/herenow/releases/20261014-i18n`（前一版本 20261014-features、20261014-initial 均保留），稳定入口 `/srv/herenow/current`。`output` 和 `.local` 指向 `/srv/herenow/shared`，升级时保留备份与删除账本。后端以独立 `herenow` 用户运行，代码只读，配置 root 管理，只有共享运维目录可写。
+后端源码直接克隆到 `ssh b` 的家目录 `/root/HereNow`，在仓库根目录通过 `ecosystem.config.cjs` 由现有 root PM2 管理 `herenow-api`。API 的 cwd 为 `/root/HereNow`，单进程监听 `127.0.0.1:3018`；PM2 通过已启用的 `pm2-root.service` 开机恢复。旧 `herenow-api.service` 停止并禁用，避免重复监听。旧 `/srv/herenow/releases` 保留供回滚，不再作为当前 API 的工作目录。
+
+`.env` 链接到 `/etc/herenow/backend.env`，生产秘密不进入 Git、PM2 ecosystem 或命令行。`output` 和 `.local` 分别链接到 `/srv/herenow/shared/output`、`/srv/herenow/shared/local`，继续使用既有备份和删除账本。API 和运维任务沿用 root PM2 的运行账号；不再具有原独立 herenow 用户 API 的 systemd 沙箱隔离。备份／清理仍由已有 systemd timers 触发，服务模板改为 root 账号和新仓库 cwd，`ProtectHome=read-only` 允许读取代码，写入仍限定共享目录。
+
+首次安装（生产配置、MySQL、Nginx、共享目录已准备）：
 
 ```sh
-ssh b 'systemctl status herenow-api --no-pager'
-ssh b 'systemctl restart herenow-api'
+ssh b
+cd ~
+git clone git@github.com:Gentle-Lijie/HereNow.git
+cd ~/HereNow
+ln -s /etc/herenow/backend.env .env
+ln -s /srv/herenow/shared/output output
+ln -s /srv/herenow/shared/local .local
+npm ci --no-audit --no-fund
+npm run build -w @herenow/api
+# 切换前备份；仅在有新迁移时执行 db:migrate。
+PATH=/www/server/mysql/bin:$PATH npm run backup
+systemctl disable --now herenow-api.service
+umask 077
+pm2 start ecosystem.config.cjs --only herenow-api
+pm2 save
+# 新机器需用 pm2 startup 按输出配置开机恢复；本服务器已启用 pm2-root。
+install -m 644 deploy/herenow-backup.service deploy/herenow-cleanup.service /etc/systemd/system/
+systemctl daemon-reload
+```
+
+日常查看与重启：
+
+```sh
+ssh b 'cd ~/HereNow && pm2 status herenow-api'
+ssh b 'cd ~/HereNow && pm2 restart ecosystem.config.cjs --only herenow-api'
 ssh b 'systemctl start herenow-backup.service'
 ssh b 'systemctl start herenow-cleanup.service'
 ssh b 'systemctl list-timers herenow-backup.timer herenow-cleanup.timer'
@@ -68,7 +95,9 @@ curl --fail https://checkin-api.lijie.space/api/health
 
 首次创建生产管理员仅调用 `ensureAdmin`，没有运行示例活动 seed。初始登录资料只存本机 `.local/deployment/admin-login.txt`。更新密码按 README 的显式重置流程操作；改变配置不会自动覆盖现有账号密码。
 
-后端发布目前通过 SSH，前端 GitHub 自动部署不自动替换后端。后续后端发布需上传新的源码发布目录、安装锁定依赖、编译 API、先备份再执行版本化迁移、切换 current 并重启。不能通过回退代码自动撤销已执行的数据库迁移。
+后端发布通过 SSH，前端 GitHub 自动部署不自动替换后端。在 `/root/HereNow` 执行 `git pull --ff-only`、`npm ci --no-audit --no-fund`、`npm run build -w @herenow/api`，先备份，再按需要执行版本化迁移，然后 `pm2 restart ecosystem.config.cjs --only herenow-api` 并检查健康状态、`pm2 save`。本次原因选填不涉及数据库变更，不执行迁移。不能通过回退代码自动撤销已执行的数据库迁移。
+
+切换失败时先 `pm2 stop herenow-api`，再 `systemctl enable --now herenow-api.service` 恢复旧 API；必要时恢复预先保存的备份／清理 unit 并 daemon-reload。确认旧 API 健康后更新 PM2 保存列表，避免重启时双启动。
 
 ## 验证状态
 

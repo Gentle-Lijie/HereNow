@@ -106,7 +106,6 @@ function openManual() {
 async function manual() {
   busy.value = true;
   try {
-    if (!reason.value.trim()) throw new Error('请填写人工补签原因');
     validateAnswers(
       (event.value?.fields ?? []).filter((f) => f.source === 'user' && f.visibility === 'public'),
       answers.value,
@@ -137,10 +136,7 @@ function openReview(record: CheckinRecord) {
   reviewOpen.value = true;
 }
 async function review() {
-  if (!selected.value || !reason.value.trim()) {
-    message.error('请填写处理原因');
-    return;
-  }
+  if (!selected.value) return;
   busy.value = true;
   try {
     await api(`/admin/checkins/${selected.value.id}/review`, {
@@ -330,7 +326,7 @@ onBeforeUnmount(() => {
               { value: 'CHECKED_IN', label: '已现场确认，签到成功' },
               { value: 'PENDING_REVIEW', label: '待进一步核验' },
             ]" /></a-form-item
-        ><a-form-item label="人工处理原因" required
+        ><a-form-item label="人工处理原因（选填）"
           ><a-input-textarea
             v-model:value="reason"
             :rows="3"
@@ -351,7 +347,7 @@ onBeforeUnmount(() => {
               { value: 'CHECKED_IN', label: '确认成功 / 恢复' },
               { value: 'REVOKED', label: '撤销记录' },
             ]" /></a-form-item
-        ><a-form-item label="处理原因" required
+        ><a-form-item label="处理原因（选填）"
           ><a-input-textarea v-model:value="reason" :rows="3" /></a-form-item></a-form></a-modal
     ><a-modal :open="Boolean(detail)" title="签到详情" :footer="null" @cancel="detail = undefined"
       ><dl v-if="detail" class="detail-list">

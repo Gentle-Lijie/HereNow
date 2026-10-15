@@ -656,7 +656,7 @@ export async function buildApp() {
       z
         .object({
           submission: checkinInputSchema,
-          reason: z.string().trim().min(1).max(500),
+          reason: z.string().trim().max(500).default(''),
           status: z.enum(['CHECKED_IN', 'PENDING_REVIEW']),
         })
         .strict(),
@@ -676,7 +676,7 @@ export async function buildApp() {
         z
           .object({
             status: z.enum(['CHECKED_IN', 'REVOKED']),
-            reason: z.string().trim().min(1).max(500),
+            reason: z.string().trim().max(500).default(''),
           })
           .strict(),
         r,

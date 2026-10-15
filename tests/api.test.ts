@@ -314,6 +314,75 @@ describe('real MySQL check-in transactions', () => {
     );
     expect(Number(count?.n)).toBe(1);
   });
+  it.each([undefined, '', ' \n ', '  现场确认  ', '原'.repeat(500)])(
+    'accepts optional manual/review reasons and retains the audit trail (%j)',
+    async (reason) => {
+      const e = await create();
+      await publish(e);
+      const reasonInput = reason === undefined ? {} : { reason };
+      const first = await admin.call('POST', `/api/admin/events/${e.id}/checkins/manual`, {
+        submission: submission(),
+        status: 'PENDING_REVIEW',
+        ...reasonInput,
+      });
+      expect(first.statusCode).toBe(200);
+      const id = first.json().result.id as string;
+      for (const status of ['CHECKED_IN', 'REVOKED', 'CHECKED_IN']) {
+        const response = await admin.call('POST', `/api/admin/checkins/${id}/review`, {
+          status,
+          ...reasonInput,
+        });
+        expect(response.statusCode).toBe(200);
+      }
+      const entries = await rows<{ action: string; reason: string; user_id: string }>(
+        db,
+        'SELECT action,reason,user_id FROM audit_logs WHERE event_id=? AND (action=? OR action LIKE ?) ORDER BY id',
+        [e.id, 'MANUAL_CHECKIN', 'REVIEW_%'],
+      );
+      expect(entries.map((entry) => entry.action)).toEqual([
+        'MANUAL_CHECKIN',
+        'REVIEW_CHECKED_IN',
+        'REVIEW_REVOKED',
+        'REVIEW_CHECKED_IN',
+      ]);
+      for (const entry of entries) {
+        expect(entry.reason).toBe(reason?.trim() ?? '');
+        expect(String(entry.user_id)).toBe(String(testAdmin!.id));
+      }
+    },
+  );
+  it('rejects overlong manual/review reasons without writing records or audit entries', async () => {
+    const e = await create();
+    await publish(e);
+    const reason = '原'.repeat(501);
+    const rejected = await admin.call('POST', `/api/admin/events/${e.id}/checkins/manual`, {
+      submission: submission(),
+      status: 'PENDING_REVIEW',
+      reason,
+    });
+    expect(rejected.statusCode).toBe(400);
+    const first = await admin.call('POST', `/api/admin/events/${e.id}/checkins/manual`, {
+      submission: submission(),
+      status: 'PENDING_REVIEW',
+    });
+    expect(first.statusCode).toBe(200);
+    const id = first.json().result.id as string;
+    const review = await admin.call('POST', `/api/admin/checkins/${id}/review`, {
+      status: 'CHECKED_IN',
+      reason,
+    });
+    expect(review.statusCode).toBe(400);
+    const [record] = await rows<{ status: string }>(db, 'SELECT status FROM checkins WHERE id=?', [
+      id,
+    ]);
+    expect(record?.status).toBe('PENDING_REVIEW');
+    const [count] = await rows<{ n: number }>(
+      db,
+      'SELECT COUNT(*) AS n FROM audit_logs WHERE event_id=? AND (action=? OR action LIKE ?)',
+      [e.id, 'MANUAL_CHECKIN', 'REVIEW_%'],
+    );
+    expect(Number(count?.n)).toBe(1);
+  });
   it('enforces whitelist qualification and only server roster authority enters snapshots', async () => {
     const e = await create({
       admission: 'roster',

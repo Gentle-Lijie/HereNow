@@ -4,6 +4,10 @@ import vue from 'eslint-plugin-vue';
 export default ts.config(
   { ignores: ['node_modules/**', '**/dist/**', 'output/**', '.local/**', '.playwright-cli/**'] },
   js.configs.recommended,
+  {
+    files: ['**/*.cjs'],
+    languageOptions: { globals: { module: 'readonly', __dirname: 'readonly' } },
+  },
   ...ts.configs.recommended,
   ...vue.configs['flat/recommended'],
   {

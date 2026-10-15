@@ -23,17 +23,21 @@ const controller = createPipController({
     ]);
     return (target, eventId) => {
       const style = target.document.createElement('style');
-      let branding = '';
+      let componentStyles = '';
       for (const sheet of Array.from(document.styleSheets)) {
         try {
           for (const rule of Array.from(sheet.cssRules))
-            if (rule.cssText.includes('.brand') || rule.cssText.includes('.event-logo'))
-              branding += rule.cssText;
+            if (
+              rule.cssText.includes('.brand') ||
+              rule.cssText.includes('.event-logo') ||
+              rule.cssText.includes('.language-switch')
+            )
+              componentStyles += rule.cssText;
         } catch {
           /* Cross-origin styles are not needed by the lightweight display. */
         }
       }
-      style.textContent = css + branding;
+      style.textContent = css + componentStyles;
       target.document.head.append(style);
       target.document.title = '活动签到';
       target.document.body.style.margin = '0';
@@ -43,6 +47,7 @@ const controller = createPipController({
         eventId,
         timerHost: target,
         origin: location.origin,
+        showLanguageSwitch: true,
         onTitle: (value: string) => {
           target.document.title = value;
         },

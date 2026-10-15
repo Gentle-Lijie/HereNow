@@ -1,11 +1,17 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watchEffect } from 'vue';
+import { ref, shallowRef, computed, onMounted, onBeforeUnmount, watchEffect } from 'vue';
 import QRCode from 'qrcode';
 import { api } from '../services/api';
 import { locale, t, publicErrorMessage } from '../services/locale';
 import EventBrand from '../components/EventBrand.vue';
+import LanguageSwitch from '../components/LanguageSwitch.vue';
 import { displayClockOffset } from '../services/display-clock';
-const props = defineProps<{ eventId: string; timerHost: Window; origin: string }>();
+const props = defineProps<{
+  eventId: string;
+  timerHost: Window;
+  origin: string;
+  showLanguageSwitch?: boolean;
+}>();
 const emit = defineEmits<{ title: [string] }>();
 const requests = new AbortController();
 const name = ref(''),
@@ -14,7 +20,7 @@ const name = ref(''),
   expires = ref(0),
   offset = ref(0),
   now = ref(Date.now()),
-  error = ref(''),
+  error = shallowRef<unknown>(null),
   loading = ref(true);
 const remaining = computed(() =>
   Math.max(0, Math.ceil((expires.value - now.value - offset.value) / 1000)),
@@ -53,10 +59,10 @@ async function refresh() {
     expires.value = Date.parse(result.expires_at);
     offset.value = displayClockOffset(result.server_time, requestStartedAt);
     now.value = Date.now();
-    error.value = '';
+    error.value = null;
   } catch (cause) {
     if (alive) {
-      error.value = publicErrorMessage(cause);
+      error.value = cause;
       const status = (cause as { status?: number }).status;
       if (status && status >= 400 && status < 500) {
         expires.value = 0;
@@ -88,7 +94,10 @@ watchEffect(() => {
 </script>
 <template>
   <main class="display-code" :lang="locale === 'en' ? 'en' : 'zh-CN'">
-    <EventBrand :logo="logo" :name="name" />
+    <div class="display-code__header">
+      <EventBrand :logo="logo" :name="name" />
+      <LanguageSwitch v-if="showLanguageSwitch" />
+    </div>
     <h1>{{ name || t('准备签到', 'Preparing check-in') }}</h1>
     <p class="display-code__label">{{ t('签到', 'Check in') }}</p>
     <div class="display-code__qr">
@@ -101,7 +110,9 @@ watchEffect(() => {
         {{
           loading
             ? t('正在生成签到码…', 'Generating QR code…')
-            : error || t('签到码已过期，正在刷新…', 'QR code expired. Refreshing…')
+            : error
+              ? publicErrorMessage(error)
+              : t('签到码已过期，正在刷新…', 'QR code expired. Refreshing…')
         }}
       </p>
     </div>

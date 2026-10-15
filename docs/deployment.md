@@ -113,8 +113,8 @@ curl --fail https://checkin-api.lijie.space/api/health
 
 2026-10-15 PM2 迁移实测：`/root/HereNow` 通过 Git SSH 克隆，锁定依赖安装和 API 编译通过；切换前备份完成。实际 PM2 cwd 和脚本均位于 `/root/HereNow`，进程 online、无重启；旧 API unit inactive / disabled，`pm2-root` 和原备份／清理 timers 保持 enabled，新的两个 oneshot 均 Result=success / ExecMainStatus=0。源站和 Makers 同源 `/api/health` 返回 OK；Makers 自动部署产物已包含原因选填改动。未通过重启整台服务器验证开机恢复，以已启用 unit 与 PM2 保存列表为检查范围。
 
-## 2026-10-15 后台账号安全更新（待发布）
+## 2026-10-15 后台账号安全更新（已发布）
 
-本次密码修改与 Passkey 功能需要迁移 007。按既有流程先备份，再安装固定依赖、运行 `npm run db:migrate`、构建并重启 API，最后更新前端；API 启动要求迁移 007 已登记。本机开发库已备份并迁移，生产未应用此次更新。
+本次密码修改与 Passkey 功能需要迁移 007。按既有流程先备份，再安装固定依赖、运行 `npm run db:migrate`、构建并重启 API，最后更新前端；API 启动要求迁移 007 已登记。生产已于 2026-10-15 备份后执行迁移 007 并更新 API，功能提交为 `bf43c57`。PM2 单进程 online，重启次数仅增加本次计划重启的 1 次；GitHub main 推送后 Makers 新前端已在生产域名生效。
 
-WebAuthn 使用浏览器同源地址：`APP_ORIGIN=https://checkin.lijie.space`，RP ID 自动取 `checkin.lijie.space`，不使用 API 源站域名。完整 Origin 必须精确匹配，不含尾斜线或路径；测试临时域名或 localhost 上创建的 Passkey 不能用于生产主机名。每账号最多 10 个凭证，操作系统执行用户验证；不支持 Passkey 的浏览器保留密码登录。新增表随数据库备份，过期认证挑战由常规 cleanup 删除。真机与 MySQL 8.4 的本次功能验证待完成，详见 `docs/account-security-validation.md`。
+WebAuthn 使用浏览器同源地址：`APP_ORIGIN=https://checkin.lijie.space`，RP ID 自动取 `checkin.lijie.space`，不使用 API 源站域名。完整 Origin 必须精确匹配，不含尾斜线或路径；测试临时域名或 localhost 上创建的 Passkey 不能用于生产主机名。每账号最多 10 个凭证，操作系统执行用户验证；不支持 Passkey 的浏览器保留密码登录。新增表随数据库备份，过期认证挑战由常规 cleanup 删除。服务器实际 Node 22.14.0 / MySQL 8.4.5 隔离库的全量 118 项测试通过；生产域名的临时管理员改密、Passkey 注册／登录／删除及密码回退闭环通过，临时账号与测试库已清理。现有管理员密码未改动。真实设备验证仍待完成，详见 `docs/account-security-validation.md`。

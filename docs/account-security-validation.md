@@ -31,6 +31,14 @@
 - 生产先备份，再 `npm ci`、`npm run db:migrate`、构建并重启 API，然后更新前端。API 启动检查迁移 007，避免用旧数据库结构提供不完整认证能力。
 - `APP_ORIGIN` 必须是浏览器实际访问的完整源（协议、主机、可选端口，不含路径／尾斜线），例如 `https://checkin.lijie.space`。RP ID 自动使用其主机名，不能填源站 API 域名。Passkey 属于注册时的站点；更换主机名需重新注册。
 - 需要 HTTPS，localhost 用于本地开发。浏览器、设备或内置 WebView 不支持时使用密码登录。已注册凭证的设备验证由系统执行，服务器不获取指纹／面容数据或私钥。
-- 本机验证为 MySQL 9.3.0；本次尚未在生产使用的 MySQL 8.4.5 上重跑，生产未发布本次变更。既有 MySQL 8.4 验收不代表新增认证逻辑已通过该版本验收。
+- 2026-10-15 已在服务器 Node 22.14.0 / MySQL 8.4.5 的独立 `herenow_test` 完成验证：新增 19 项认证测试使用业务账号通过，全量 118 项使用隔离库测试管理账号通过（包含需触发器权限的故障注入测试），没有扩大生产业务账号权限。隔离库及临时权限已清理。生产已完成迁移与发布。
 - 尚未使用真实 Touch ID、Face ID、Android 验证器、实体安全密钥、密码管理器同步或跨设备扫码验证。虚拟验证器不能替代这些真机兼容性结论；未执行新认证接口的生产压测。
 - 部署方密码重置命令只重置密码并撤销会话，不移除已有 Passkey。密码恢复后可在账号安全页验密移除遗失或不可信凭证；密码修改本身不撤销 Passkey。
+
+## 生产发布与回归
+
+2026-10-15 功能提交 `bf43c57` 已发布。后端先在 `/root/HereNow` 快进到该提交，完成迁移 007、固定依赖安装、API 编译和 PM2 重启，再推送 GitHub main 触发 Makers 自动部署。生产备份为 `/srv/herenow/shared/output/backups/herenow-2026-10-15T14-37-53.026Z.sql`。生产管理员已有密码和 Passkey 未更改。
+
+`https://checkin.lijie.space` 的首页、登录页、`/admin/security` 直接访问均为正常 SPA，新增 Login、Security 和账号安全客户端 JS／CSS 均以正确内容类型返回 200。公网 API 健康、Secure Cookie、Passkey RP ID `checkin.lijie.space`、强制用户验证、匿名访问 401、错误 Origin 403 均验证通过。
+
+Chromium 在实际生产域名上使用临时管理员与虚拟验证器，完成密码登录 → 添加 Passkey → 修改密码并退出 → 原 Passkey 登录 → 移除 Passkey → 被移除凭证登录拒绝 → 新密码登录 → 退出；无未处理浏览器错误。临时账号、凭证、会话、测试审计和本地凭据文件已清理，没有创建测试活动。生产桌面／手机截图在被忽略的 `output/playwright/account-security-production-*.png`。真实硬件生物识别、跨设备同步及生产压测仍待验证。
